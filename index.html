@@ -72,7 +72,7 @@
         import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, limit, setDoc, getDoc } from "firebase/firestore";
         import { getAuth, signInAnonymously } from "firebase/auth";
 
-        const { useState, useEffect, useMemo, useRef, useLayoutEffect } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
         const firebaseConfig = {
             apiKey: "AIzaSyB9JdhTd0Gl07U8ZKCs5s9QHsw4zVdsIiw",
@@ -127,18 +127,14 @@
         const Minus = (p) => <IconBase {...p}><path d="M5 12h14"/></IconBase>;
         const Copy = (p) => <IconBase {...p}><rect width="13" height="13" x="9" y="9" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconBase>;
 
-        // ------------------------------------------------------------
-        // COMPONENTS (HIERARCHISCH SORTIERT: KLEIN NACH GROSS)
-        // ------------------------------------------------------------
-
-        // 1. MapRenderer (Basis-Komponente für Kartenanzeige)
+        // --- 1. MAP RENDERER ---
         const MapRenderer = ({ tables, onTableClick, selectedTableId, isEditor, onDragMove, onDragEnd }) => {
             const containerRef = useRef(null);
             const [scale, setScale] = useState(1);
             const [isDragging, setIsDragging] = useState(false);
             const dragItem = useRef(null);
 
-            useLayoutEffect(() => {
+            useEffect(() => {
                 const handleResize = () => {
                     if (containerRef.current) {
                         const { width } = containerRef.current.getBoundingClientRect();
@@ -165,7 +161,6 @@
             const handleMouseMove = (e) => {
                 if (!isDragging || !dragItem.current || !containerRef.current) return;
                 e.preventDefault();
-                
                 const rect = containerRef.current.getBoundingClientRect();
                 const clientX = e.touches ? e.touches[0].clientX : e.clientX;
                 const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -174,7 +169,6 @@
                 let y = ((clientY - rect.top) / rect.height) * 100;
                 x = Math.max(0, Math.min(100, x));
                 y = Math.max(0, Math.min(100, y));
-                
                 if (onDragMove) onDragMove(dragItem.current, x, y);
             };
 
@@ -195,17 +189,7 @@
                     onTouchMove={handleMouseMove}
                     onTouchEnd={handleMouseUp}
                 >
-                    <div 
-                        style={{ 
-                            width: '1000px', 
-                            height: '800px', 
-                            transform: `scale(${scale})`, 
-                            transformOrigin: 'top left',
-                            position: 'absolute',
-                            top: 0,
-                            left: 0
-                        }}
-                    >
+                    <div style={{ width: '1000px', height: '800px', transform: `scale(${scale})`, transformOrigin: 'top left', position: 'absolute', top: 0, left: 0 }}>
                         {tables.map(table => (
                             <div
                                 key={table.id}
@@ -480,7 +464,7 @@
             );
         };
 
-        // 5. AdminView
+        // 4. AdminView
         const AdminView = ({ employees, logs, setView, theme, isDarkMode, db, tableLayout }) => {
             const [activeTab, setActiveTab] = useState('employees');
             const [empName, setEmpName] = useState('');
@@ -570,7 +554,7 @@
             );
         };
 
-        // 6. ReservationBook
+        // 5. ReservationBook
         const ReservationBook = ({ currentUser, handleLogout, theme, isDarkMode, toggleDarkMode, setView, addLogEntry, reservations, db, tableLayout }) => {
             const [currentDate, setCurrentDate] = useState(new Date());
             const [isModalOpen, setIsModalOpen] = useState(false);
@@ -854,7 +838,7 @@
             );
         };
 
-        // 6. App
+        // --- 6. App ---
         const App = () => {
             const [view, setView] = useState('landing'); 
             const [currentUser, setCurrentUser] = useState(null);
@@ -903,38 +887,33 @@
                             setTableLayout(docSnap.data().layout || []);
                         }
                     });
-
+                    
                     // SSO Check
                     const params = new URLSearchParams(window.location.search);
                     const token = params.get('auth_token');
                     if (token) {
                         try {
-                            const HUB_APP_ID = 'DEINE_HUB_APP_ID'; // Placeholder
-                            const tokenRef = doc(db, 'artifacts', HUB_APP_ID, 'public', 'data', 'auth_tokens', token);
+                            const hubAppId = 'mabelle-hub-live'; 
+                            const tokenRef = doc(db, 'artifacts', hubAppId, 'public', 'data', 'auth_tokens', token);
                             getDoc(tokenRef).then(async (tokenSnap) => {
                                 if (tokenSnap.exists()) {
                                     const data = tokenSnap.data();
                                     const now = new Date();
                                     const expiresAt = new Date(data.expiresAt); 
-                                    
                                     if (now < expiresAt && !data.used) {
-                                        console.log("SSO Login success:", data.userName);
                                         setCurrentUser({
                                             id: data.userId || 'sso',
                                             name: data.userName || 'Gast',
-                                            role: data.isAdmin ? 'admin' : 'staff', // Map role
+                                            role: data.isAdmin ? 'admin' : 'staff', 
                                             pin: 'SSO'
                                         });
                                         setView('book');
-                                        
                                         await deleteDoc(tokenRef);
                                         window.history.replaceState({}, document.title, window.location.pathname);
                                     }
                                 }
                             });
-                        } catch(e) {
-                            console.error("SSO Error", e);
-                        }
+                        } catch(e) { console.error("SSO Error", e); }
                     }
 
                     setIsLoading(false);
@@ -970,6 +949,17 @@
 
             const handleLogout = () => { setCurrentUser(null); setView('landing'); };
             const handleNumpadClick = (num) => { if (pinInput.length < 4) setPinInput(prev => prev + num); };
+
+            // AUTO LOGOUT
+            useEffect(() => {
+                if (!currentUser) return; 
+                let timeoutId;
+                const resetTimer = () => { clearTimeout(timeoutId); timeoutId = setTimeout(() => { handleLogout(); }, 30000); };
+                const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+                events.forEach(event => document.addEventListener(event, resetTimer));
+                resetTimer();
+                return () => { clearTimeout(timeoutId); events.forEach(event => document.removeEventListener(event, resetTimer)); };
+            }, [currentUser]);
 
             const theme = {
                 bg: isDarkMode ? 'bg-stone-900' : 'bg-stone-100',
