@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MABELLE Booking</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23d97706%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M17 8h1a4 4 0 1 1 0 8h-1%22/><path d=%22M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z%22/><line x1=%226%22 x2=%226%22 y1=%222%22 y2=%224%22/><line x1=%2210%22 x2=%2210%22 y1=%222%22 y2=%224%22/><line x1=%2214%22 x2=%2214%22 y1=%222%22 y2=%224%22/></svg>">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Import Map für Firebase -->
+    <script type="importmap">
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"
+      }
+    }
+    </script>
+
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; touch-action: manipulation; }
+        .font-mabelle { font-family: 'Avenir Next', 'Avenir', 'Helvetica Neue', sans-serif; font-weight: 200; }
+        html { overflow-y: scroll; }
+        input[type="date"]::-webkit-calendar-picker-indicator { position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0; padding: 0; cursor: pointer; opacity: 0; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .time-select { text-align: center; text-align-last: center; -moz-text-align-last: center; background-color: transparent; }
+        
+        .grid-bg {
+            background-size: 20px 20px;
+            background-image:
+                linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
+        }
+        .dark .grid-bg {
+            background-image:
+                linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Fehler-Anzeige -->
+    <div id="error-container" style="display:none; padding:20px; background:#fee2e2; color:#b91c1c; font-family:sans-serif; border-bottom:1px solid #ef4444; position:fixed; top:0; left:0; right:0; z-index:9999;">
+        <strong>Fehler:</strong> <span id="error-text"></span>
+        <button onclick="window.location.reload()" style="margin-top:10px; display:block; padding:5px 10px; background:#b91c1c; color:white; border:none; border-radius:4px;">Neu laden</button>
+    </div>
+
+    <div id="root"></div>
+
+    <script>
+        window.onerror = function(msg, url, line) {
+            document.getElementById('error-container').style.display = 'block';
+            document.getElementById('error-text').innerText = msg + " (Zeile " + line + ")";
+        };
+    </script>
+
+    <script type="text/babel" data-type="module">
+        import { initializeApp } from "firebase/app";
+        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, limit, setDoc, getDoc } from "firebase/firestore";
+        import { getAuth, signInAnonymously } from "firebase/auth";
+
+        const { useState, useEffect, useMemo, useRef, useLayoutEffect } = React;
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB9JdhTd0Gl07U8ZKCs5s9QHsw4zVdsIiw",
+            authDomain: "mabellebooking-ddf3b.firebaseapp.com",
+            projectId: "mabellebooking-ddf3b",
+            storageBucket: "mabellebooking-ddf3b.firebasestorage.app",
+            messagingSenderId: "422167319872",
+            appId: "1:422167319872:web:cfaa9ffcbdc9eeec1856a5"
+        };
+
+        let app, db, auth;
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+        } catch (err) {
+            console.error("Firebase Init Error", err);
+        }
+
+        // --- ICONS ---
+        const IconBase = ({ size = 24, className = "", children, ...props }) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>);
+        const Plus = (p) => <IconBase {...p}><path d="M5 12h14"/><path d="M12 5v14"/></IconBase>;
+        const CalendarIcon = (p) => <IconBase {...p}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></IconBase>;
+        const Search = (p) => <IconBase {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></IconBase>;
+        const Users = (p) => <IconBase {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconBase>;
+        const Phone = (p) => <IconBase {...p}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></IconBase>;
+        const Clock = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></IconBase>;
+        const X = (p) => <IconBase {...p}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></IconBase>;
+        const Trash2 = (p) => <IconBase {...p}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></IconBase>;
+        const Edit2 = (p) => <IconBase {...p}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></IconBase>;
+        const ChevronLeft = (p) => <IconBase {...p}><path d="m15 18-6-6 6-6"/></IconBase>;
+        const ChevronRight = (p) => <IconBase {...p}><path d="m9 18 6-6-6-6"/></IconBase>;
+        const CheckCircle = (p) => <IconBase {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></IconBase>;
+        const Coffee = (p) => <IconBase {...p}><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/></IconBase>;
+        const Moon = (p) => <IconBase {...p}><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></IconBase>;
+        const Sun = (p) => <IconBase {...p}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></IconBase>;
+        const Archive = (p) => <IconBase {...p}><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></IconBase>;
+        const Gift = (p) => <IconBase {...p}><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></IconBase>;
+        const Trophy = (p) => <IconBase {...p}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></IconBase>;
+        const SunIcon = (p) => <IconBase {...p}><circle cx="12" cy="12" r="5"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.22 4.22l1.42 1.42"/><path d="M18.36 18.36l1.42 1.42"/><path d="M1 12h2"/><path d="M21 12h2"/><path d="M4.22 19.78l1.42-1.42"/><path d="M18.36 5.64l1.42-1.42"/></IconBase>;
+        const Lock = (p) => <IconBase {...p}><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></IconBase>;
+        const LogOut = (p) => <IconBase {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></IconBase>;
+        const Shield = (p) => <IconBase {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></IconBase>;
+        const Utensils = (p) => <IconBase {...p}><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></IconBase>;
+        const Save = (p) => <IconBase {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></IconBase>;
+        const AlertCircle = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></IconBase>;
+        const Check = (p) => <IconBase {...p}><polyline points="20 6 9 17 4 12"/></IconBase>;
+        const Square = (p) => <IconBase {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></IconBase>;
+        const Circle = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/></IconBase>;
+        const DoorOpen = (p) => <IconBase {...p}><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></IconBase>;
+        const Maximize = (p) => <IconBase {...p}><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></IconBase>;
+        const Minus = (p) => <IconBase {...p}><path d="M5 12h14"/></IconBase>;
+        const Copy = (p) => <IconBase {...p}><rect width="13" height="13" x="9" y="9" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconBase>;
+
+        // ------------------------------------------------------------
+        // COMPONENTS (HIERARCHISCH SORTIERT: KLEIN NACH GROSS)
+        // ------------------------------------------------------------
+
+        // 1. MapRenderer (Basis-Komponente für Kartenanzeige)
+        const MapRenderer = ({ tables, onTableClick, selectedTableId, isEditor, onDragMove, onDragEnd }) => {
+            const containerRef = useRef(null);
+            const [scale, setScale] = useState(1);
+            const [isDragging, setIsDragging] = useState(false);
+            const dragItem = useRef(null);
+
+            useLayoutEffect(() => {
+                const handleResize = () => {
+                    if (containerRef.current) {
+                        const { width } = containerRef.current.getBoundingClientRect();
+                        const newScale = Math.min(1, width / 1000); 
+                        setScale(newScale);
+                    }
+                };
+                handleResize();
+                window.addEventListener('resize', handleResize);
+                return () => window.removeEventListener('resize', handleResize);
+            }, []);
+
+            const handleMouseDown = (e, id) => {
+                if (!isEditor) {
+                     if (onTableClick) onTableClick(id);
+                     return;
+                }
+                e.preventDefault();
+                setIsDragging(true);
+                dragItem.current = id;
+                if (onTableClick) onTableClick(e, id);
+            };
+
+            const handleMouseMove = (e) => {
+                if (!isDragging || !dragItem.current || !containerRef.current) return;
+                e.preventDefault();
+                
+                const rect = containerRef.current.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                let x = ((clientX - rect.left) / rect.width) * 100;
+                let y = ((clientY - rect.top) / rect.height) * 100;
+                x = Math.max(0, Math.min(100, x));
+                y = Math.max(0, Math.min(100, y));
+                
+                if (onDragMove) onDragMove(dragItem.current, x, y);
+            };
+
+            const handleMouseUp = () => {
+                setIsDragging(false);
+                dragItem.current = null;
+                if (onDragEnd) onDragEnd();
+            };
+
+            return (
+                <div 
+                    ref={containerRef} 
+                    className={`relative w-full overflow-hidden bg-stone-100 dark:bg-stone-900 grid-bg rounded-lg`}
+                    style={{ height: isEditor ? '800px' : '500px' }} 
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                    onTouchMove={handleMouseMove}
+                    onTouchEnd={handleMouseUp}
+                >
+                    <div 
+                        style={{ 
+                            width: '1000px', 
+                            height: '800px', 
+                            transform: `scale(${scale})`, 
+                            transformOrigin: 'top left',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0
+                        }}
+                    >
+                        {tables.map(table => (
+                            <div
+                                key={table.id}
+                                onMouseDown={(e) => handleMouseDown(e, table.id)}
+                                onTouchStart={(e) => handleMouseDown(e, table.id)}
+                                style={{ 
+                                    left: `${table.x}%`, top: `${table.y}%`, 
+                                    width: `${table.w}px`, height: `${table.h}px`,
+                                    borderRadius: table.subtype === 'round' ? '50%' : '4px',
+                                    transform: `translate(-50%, -50%) rotate(${table.rotation || 0}deg)`,
+                                    zIndex: selectedTableId === table.id ? 50 : (table.type === 'area' ? 1 : 10),
+                                    backgroundColor: table.type === 'window' ? '#38bdf8' : (table.type === 'wall' ? '#78716c' : (table.type === 'area' ? 'rgba(150,150,150,0.2)' : '')),
+                                    borderStyle: table.type === 'area' ? 'dashed' : 'solid'
+                                }}
+                                className={`absolute flex flex-col items-center justify-center text-xs font-bold select-none transition-shadow
+                                    ${isEditor ? 'cursor-move' : 'cursor-pointer'}
+                                    ${table.type === 'table' ? 'border-2 shadow-sm' : ''}
+                                    ${table.type === 'table' && selectedTableId === table.id ? 'bg-amber-500 border-amber-300 text-white ring-4 ring-amber-200/50' : ''}
+                                    ${table.type === 'table' && selectedTableId !== table.id ? 'bg-white dark:bg-stone-700 border-stone-300 dark:border-stone-500 text-stone-700 dark:text-stone-200' : ''}
+                                    ${table.type === 'door' ? '' : ''}
+                                `}
+                            >
+                                {table.type === 'door' ? (
+                                    <div className="w-full h-full relative">
+                                        <div className="absolute bottom-0 left-0 w-[10%] h-full bg-stone-800 dark:bg-stone-400"></div> 
+                                        <div className="absolute bottom-0 right-0 w-[10%] h-full bg-stone-800 dark:bg-stone-400"></div> 
+                                        <div className="absolute bottom-0 left-[10%] w-[40%] h-full border-t-2 border-l-2 border-stone-800 dark:border-stone-400 rounded-tl-[100%] opacity-60 origin-bottom-right"></div>
+                                        <div className="absolute bottom-0 left-[10%] w-[40%] h-1 bg-stone-800 dark:bg-stone-400 origin-bottom-left transform -rotate-45"></div>
+                                        <div className="absolute bottom-0 right-[10%] w-[40%] h-full border-t-2 border-r-2 border-stone-800 dark:border-stone-400 rounded-tr-[100%] opacity-60 origin-bottom-left"></div>
+                                        <div className="absolute bottom-0 right-[10%] w-[40%] h-1 bg-stone-800 dark:bg-stone-400 origin-bottom-right transform rotate-45"></div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <span className={`pointer-events-none ${table.w < 40 ? 'text-[8px]' : 'text-xs'}`}>{table.label}</span>
+                                        {table.seats > 0 && <span className="text-[9px] opacity-70 font-normal pointer-events-none">{table.seats}P</span>}
+                                    </>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // 2. CustomCalendar
+        const CustomCalendar = ({ currentDate, onDateSelect, onClose, reservations, theme, isDarkMode }) => {
+            const [viewDate, setViewDate] = useState(currentDate);
+
+            const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+            const getFirstDayOfMonth = (year, month) => { let day = new Date(year, month, 1).getDay(); return day === 0 ? 6 : day - 1; };
+            const year = viewDate.getFullYear();
+            const month = viewDate.getMonth();
+            const daysInMonth = getDaysInMonth(year, month);
+            const firstDay = getFirstDayOfMonth(year, month);
+            
+            const reservedDates = useMemo(() => {
+                const dates = new Set();
+                (reservations || []).forEach(r => {
+                    if (r && (r.status === 'confirmed' || r.status === 'arrived')) {
+                        const d = new Date(r.date);
+                        dates.add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
+                    }
+                });
+                return dates;
+            }, [reservations]);
+
+            const days = [];
+            for (let i = 0; i < firstDay; i++) days.push(null);
+            for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
+            const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+            const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
+            const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
+            const isSelected = (d) => d && d.getDate() === currentDate.getDate() && d.getMonth() === currentDate.getMonth() && d.getFullYear() === currentDate.getFullYear();
+            const hasReservation = (d) => { if (!d) return false; return reservedDates.has(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`); };
+
+            return (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+                    <div className={`rounded-2xl shadow-2xl p-6 w-full max-w-sm ${theme.card} border-0`} onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-6">
+                            <button onClick={prevMonth} className={`p-2 rounded-full hover:bg-stone-100 dark:hover:bg-stone-700`}><ChevronLeft/></button>
+                            <h2 className="text-lg font-bold font-mabelle uppercase tracking-widest">{monthNames[month]} {year}</h2>
+                            <button onClick={nextMonth} className={`p-2 rounded-full hover:bg-stone-100 dark:hover:bg-stone-700`}><ChevronRight/></button>
+                        </div>
+                        <div className="grid grid-cols-7 mb-2 text-center text-xs font-bold opacity-50"><div>MO</div><div>DI</div><div>MI</div><div>DO</div><div>FR</div><div>SA</div><div>SO</div></div>
+                        <div className="grid grid-cols-7 gap-1">
+                            {days.map((d, i) => {
+                                if (!d) return <div key={i}></div>;
+                                const selected = isSelected(d);
+                                const reserved = hasReservation(d);
+                                return (
+                                    <button key={i} onClick={() => { onDateSelect(d); onClose(); }} className={`h-10 w-10 mx-auto rounded-full flex items-center justify-center text-sm transition-all ${selected ? 'bg-amber-600 text-white font-bold shadow-lg' : ''} ${!selected && reserved ? 'text-amber-600 font-bold' : ''} ${!selected && !reserved ? (isDarkMode ? 'text-stone-300 hover:bg-stone-700' : 'text-stone-600 hover:bg-stone-100') : ''}`}>{d.getDate()}</button>
+                                )
+                            })}
+                        </div>
+                        <div className="mt-6 flex justify-center"><button onClick={onClose} className="text-sm opacity-50 hover:opacity-100">Schließen</button></div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 3. TableEditor
+        const TableEditor = ({ initialLayout, db, theme, isDarkMode }) => {
+            const [tables, setTables] = useState(initialLayout || []);
+            const [selectedTableId, setSelectedTableId] = useState(null);
+            const [isDragging, setIsDragging] = useState(false);
+            const dragItem = useRef(null);
+            const containerRef = useRef(null);
+            const [saveStatus, setSaveStatus] = useState(''); 
+
+            useEffect(() => {
+                if (tables.length > 0) localStorage.setItem('mabelle_tables_autosave', JSON.stringify(tables));
+            }, [tables]);
+
+            useEffect(() => {
+                if (initialLayout && initialLayout.length > 0) {
+                    setTables(initialLayout);
+                    setSaveStatus('saved');
+                } else {
+                    const saved = localStorage.getItem('mabelle_tables_autosave');
+                    if (saved) {
+                        setTables(JSON.parse(saved));
+                        setSaveStatus('local');
+                    }
+                }
+            }, [initialLayout]);
+
+            const addItem = (type, subtype) => {
+                const newItem = {
+                    id: Date.now(), type, subtype: subtype || null,
+                    label: type === 'table' ? `T${tables.filter(t => t.type === 'table').length + 1}` : (subtype === 'bar' ? 'BAR' : (subtype === 'kitchen' ? 'KÜCHE' : '')),
+                    seats: type === 'table' ? (subtype === 'round' ? 2 : 4) : 0,
+                    x: 50, y: 50, w: 60, h: 60, rotation: 0
+                };
+                if (subtype === 'rect') { newItem.w = 80; newItem.h = 60; }
+                if (type === 'wall') { newItem.w = 100; newItem.h = 4; newItem.label = ''; }
+                if (type === 'window') { newItem.w = 100; newItem.h = 6; newItem.label = ''; }
+                if (type === 'door') { newItem.w = 60; newItem.h = 40; newItem.label = ''; }
+                if (type === 'area') { newItem.w = 150; newItem.h = 100; }
+                setTables([...tables, newItem]);
+                setSaveStatus('local');
+            };
+
+            const duplicateTable = () => {
+                const selTable = tables.find(t => t.id === selectedTableId);
+                if (!selTable) return;
+                const newTable = { ...selTable, id: Date.now(), label: selTable.type === 'table' ? `T${tables.filter(t => t.type === 'table').length + 1}` : selTable.label, x: selTable.x + 5, y: selTable.y + 5 };
+                setTables([...tables, newTable]);
+                setSelectedTableId(newTable.id);
+                setSaveStatus('local');
+            };
+
+            const updateTable = (id, key, val) => {
+                setTables(prev => prev.map(t => {
+                    if (t.id === id) {
+                         const updates = { [key]: val };
+                         if (t.subtype === 'round' && (key === 'w' || key === 'h')) { updates.w = val; updates.h = val; }
+                         return { ...t, ...updates };
+                    }
+                    return t;
+                }));
+                setSaveStatus('local');
+            };
+
+            const deleteTable = () => { if (selectedTableId) { setTables(prev => prev.filter(t => t.id !== selectedTableId)); setSelectedTableId(null); setSaveStatus('local'); } };
+
+            const saveLayout = async () => {
+                localStorage.setItem('mabelle_tables_autosave', JSON.stringify(tables));
+                try {
+                    await setDoc(doc(db, "settings", "tables"), { layout: tables });
+                    setSaveStatus('saved');
+                } catch(e) { 
+                    console.error(e); 
+                    setSaveStatus('error');
+                    alert("Achtung: Cloud-Speicherung fehlgeschlagen (Rechte?), aber LOKAL im Browser gespeichert. " + e.message); 
+                }
+            };
+
+            const handlePointerMove = (id, x, y) => {
+                setTables(prev => prev.map(t => t.id === id ? { ...t, x, y } : t));
+                setSaveStatus('local');
+            };
+            const handlePointerUp = () => {};
+
+            const selTable = tables.find(t => t.id === selectedTableId);
+
+            return (
+                <div className={`p-4 rounded-xl shadow-sm border ${theme.card}`}>
+                    <div className="flex flex-wrap gap-2 mb-4 justify-between items-center">
+                        <div className="flex flex-wrap gap-2">
+                            <button onClick={() => addItem('table', 'round')} className="flex items-center gap-1 bg-white border border-stone-200 hover:bg-stone-50 dark:bg-stone-800 dark:border-stone-600 dark:text-stone-200 px-3 py-2 rounded text-sm shadow-sm font-medium"><Circle size={16}/> Rund</button>
+                            <button onClick={() => addItem('table', 'rect')} className="flex items-center gap-1 bg-white border border-stone-200 hover:bg-stone-50 dark:bg-stone-800 dark:border-stone-600 dark:text-stone-200 px-3 py-2 rounded text-sm shadow-sm font-medium"><Square size={16}/> Eckig</button>
+                            <button onClick={() => addItem('wall')} className="flex items-center gap-1 bg-white border border-stone-200 hover:bg-stone-50 dark:bg-stone-800 dark:border-stone-600 dark:text-stone-200 px-3 py-2 rounded text-sm shadow-sm font-medium"><Minus size={16}/> Wand</button>
+                            <button onClick={() => addItem('window')} className="flex items-center gap-1 bg-white border border-stone-200 hover:bg-stone-50 dark:bg-stone-800 dark:border-stone-600 dark:text-stone-200 px-3 py-2 rounded text-sm shadow-sm font-medium"><Maximize size={16}/> Fenster</button>
+                            <button onClick={() => addItem('door')} className="flex items-center gap-1 bg-white border border-stone-200 hover:bg-stone-50 dark:bg-stone-800 dark:border-stone-600 dark:text-stone-200 px-3 py-2 rounded text-sm shadow-sm font-medium"><DoorOpen size={16}/> Tür</button>
+                            <button onClick={() => addItem('area', 'bar')} className="flex items-center gap-1 bg-white border border-stone-200 hover:bg-stone-50 dark:bg-stone-800 dark:border-stone-600 dark:text-stone-200 px-3 py-2 rounded text-sm shadow-sm font-medium"><Coffee size={16}/> Bar</button>
+                            <button onClick={() => addItem('area', 'kitchen')} className="flex items-center gap-1 bg-white border border-stone-200 hover:bg-stone-50 dark:bg-stone-800 dark:border-stone-600 dark:text-stone-200 px-3 py-2 rounded text-sm shadow-sm font-medium"><Utensils size={16}/> Küche</button>
+                        </div>
+                        <div className="flex gap-2 items-center">
+                            {saveStatus === 'local' && <span className="text-xs text-orange-500 font-bold flex items-center gap-1"><AlertCircle size={12}/> Nur Lokal</span>}
+                            {saveStatus === 'error' && <span className="text-xs text-red-500 font-bold flex items-center gap-1"><AlertCircle size={12}/> Fehler</span>}
+                            {saveStatus === 'saved' && <span className="text-xs text-emerald-500 font-bold flex items-center gap-1"><Check size={12}/> Synchronisiert</span>}
+                            <button onClick={saveLayout} className="bg-amber-600 text-white px-4 py-2 rounded shadow flex items-center gap-2 font-bold hover:bg-amber-700 transition-colors">
+                                {saveStatus === 'error' ? 'Erzwingen' : 'Speichern'} <Save size={16}/>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div className="w-full relative border-2 border-dashed border-stone-300 dark:border-stone-600 rounded-lg overflow-hidden">
+                        <MapRenderer 
+                            tables={tables} 
+                            onTableClick={(e, id) => { e.preventDefault(); setSelectedTableId(id); }} 
+                            selectedTableId={selectedTableId}
+                            isEditor={true}
+                            onDragMove={handlePointerMove}
+                            onDragEnd={handlePointerUp}
+                        />
+                    </div>
+
+                    {selTable && (
+                        <div className="mt-4 p-4 bg-stone-100 dark:bg-stone-900 rounded-lg flex flex-wrap gap-4 items-center border border-stone-200 dark:border-stone-700">
+                            {selTable.type !== 'wall' && selTable.type !== 'window' && selTable.type !== 'door' && <div><label className="text-xs uppercase font-bold text-stone-500">Name</label><input value={selTable.label} onChange={e => updateTable(selTable.id, 'label', e.target.value)} className={`block w-20 p-1 rounded border ${theme.input}`}/></div>}
+                            {selTable.type === 'table' && <div><label className="text-xs uppercase font-bold text-stone-500">Plätze</label><input type="number" value={selTable.seats} onChange={e => updateTable(selTable.id, 'seats', parseInt(e.target.value))} className={`block w-16 p-1 rounded border ${theme.input}`}/></div>}
+                            
+                            <div>
+                                <label className="text-xs uppercase font-bold text-stone-500">Breite/Größe</label>
+                                <div className="flex items-center gap-2">
+                                    <input type="range" min="10" max="400" value={selTable.w} onChange={e => updateTable(selTable.id, 'w', parseInt(e.target.value))} className="block w-24"/>
+                                    <input type="number" value={selTable.w} onChange={e => updateTable(selTable.id, 'w', parseInt(e.target.value))} className={`w-14 p-1 text-xs rounded border ${theme.input} text-center`} />
+                                </div>
+                            </div>
+                            
+                            {selTable.subtype !== 'round' && (
+                            <div>
+                                <label className="text-xs uppercase font-bold text-stone-500">Höhe</label>
+                                <div className="flex items-center gap-2">
+                                    <input type="range" min="4" max="400" value={selTable.h} onChange={e => updateTable(selTable.id, 'h', parseInt(e.target.value))} className="block w-24"/>
+                                    <input type="number" value={selTable.h} onChange={e => updateTable(selTable.id, 'h', parseInt(e.target.value))} className={`w-14 p-1 text-xs rounded border ${theme.input} text-center`} />
+                                </div>
+                            </div>
+                            )}
+                            
+                            <div>
+                                <label className="text-xs uppercase font-bold text-stone-500">Rotation</label>
+                                <div className="flex items-center gap-2">
+                                    <input 
+                                        type="range" 
+                                        min="0" 
+                                        max="360" 
+                                        value={selTable.rotation || 0} 
+                                        onChange={e => updateTable(selTable.id, 'rotation', parseInt(e.target.value))} 
+                                        className="block w-24"
+                                    />
+                                    <input 
+                                        type="number" 
+                                        min="0" 
+                                        max="360" 
+                                        value={selTable.rotation || 0} 
+                                        onChange={e => updateTable(selTable.id, 'rotation', parseInt(e.target.value))} 
+                                        className={`w-14 p-1 text-xs rounded border ${theme.input} text-center`}
+                                    />
+                                    <span className="text-xs text-stone-500">°</span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex gap-2 ml-auto">
+                                <button onClick={duplicateTable} className="text-blue-500 hover:bg-blue-100 p-2 rounded flex items-center gap-1" title="Kopieren"><Copy size={18}/></button>
+                                <button onClick={deleteTable} className="text-red-500 hover:bg-red-100 p-2 rounded"><Trash2 size={18}/></button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // 5. AdminView
+        const AdminView = ({ employees, logs, setView, theme, isDarkMode, db, tableLayout }) => {
+            const [activeTab, setActiveTab] = useState('employees');
+            const [empName, setEmpName] = useState('');
+            const [empPin, setEmpPin] = useState('');
+            const [empRole, setEmpRole] = useState('staff');
+            const [editingEmpId, setEditingEmpId] = useState(null);
+            const [error, setError] = useState('');
+
+            const handleSaveEmployee = async (e) => {
+                e.preventDefault();
+                setError('');
+                if(empName && empPin) {
+                    const pinExists = employees.some(emp => emp.pin === empPin && emp.id !== editingEmpId);
+                    if (pinExists) { setError('Diese PIN wird bereits verwendet!'); return; }
+                    try {
+                        if (editingEmpId) await updateDoc(doc(db, "employees", editingEmpId), { name: empName, pin: empPin, role: empRole });
+                        else await addDoc(collection(db, "employees"), { name: empName, pin: empPin, role: empRole });
+                        resetForm();
+                    } catch (e) { console.error(e); }
+                }
+            };
+            const resetForm = () => { setEmpName(''); setEmpPin(''); setEmpRole('staff'); setEditingEmpId(null); setError(''); };
+            const startEdit = (emp) => { setEmpName(emp.name); setEmpPin(emp.pin); setEmpRole(emp.role); setEditingEmpId(emp.id); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+            const deleteEmployee = async (id) => { if (window.confirm('Löschen?')) await deleteDoc(doc(db, "employees", id)); };
+
+            return (
+                <div className={`min-h-screen p-4 ${theme.bg} ${theme.text}`}>
+                    <header className="max-w-3xl mx-auto flex justify-between items-center mb-8 pt-4">
+                        <h1 className="text-2xl font-bold flex items-center gap-2"><Shield className="text-amber-600"/> Admin Dashboard</h1>
+                        <button onClick={() => setView('book')} className={`px-4 py-2 rounded-lg ${theme.card} border shadow-sm`}>Zurück</button>
+                    </header>
+                    <div className="max-w-3xl mx-auto">
+                        <div className="flex gap-2 mb-6 overflow-x-auto">
+                            <button onClick={() => setActiveTab('employees')} className={`px-6 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${activeTab === 'employees' ? 'bg-amber-600 text-white' : `${theme.card} ${theme.textMuted}`}`}>Mitarbeiter</button>
+                            <button onClick={() => setActiveTab('tables')} className={`px-6 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${activeTab === 'tables' ? 'bg-amber-600 text-white' : `${theme.card} ${theme.textMuted}`}`}>Tischplan</button>
+                            <button onClick={() => setActiveTab('logs')} className={`px-6 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${activeTab === 'logs' ? 'bg-amber-600 text-white' : `${theme.card} ${theme.textMuted}`}`}>Protokoll</button>
+                        </div>
+
+                        {activeTab === 'employees' && (
+                            <div className={`p-6 rounded-xl shadow-sm border ${theme.card} ${editingEmpId ? 'ring-2 ring-blue-500' : ''}`}>
+                                <h3 className="font-bold text-lg mb-4">{editingEmpId ? 'Mitarbeiter bearbeiten' : 'Neuen Mitarbeiter anlegen'}</h3>
+                                <form onSubmit={handleSaveEmployee} className="flex flex-col gap-3 mb-8">
+                                    <div className="flex flex-col md:flex-row gap-3">
+                                        <input value={empName} onChange={e => setEmpName(e.target.value)} placeholder="Name" className={`flex-1 p-3 rounded-lg border ${theme.input}`} required />
+                                        <div className="flex gap-3">
+                                            <input value={empPin} onChange={e => setEmpPin(e.target.value)} placeholder="PIN (4)" maxLength={4} inputMode="numeric" className={`w-24 p-3 rounded-lg border ${theme.input}`} required />
+                                            <select value={empRole} onChange={e => setEmpRole(e.target.value)} className={`flex-1 p-3 rounded-lg border ${theme.input} bg-transparent`}><option value="staff">Kellner</option><option value="chef">Koch</option><option value="admin">Admin</option></select>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button type="submit" className={`${editingEmpId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white p-3 rounded-lg font-medium flex-1 md:w-32`}>{editingEmpId ? <Save size={20}/> : <Plus size={20}/>} {editingEmpId ? 'Speichern' : 'Hinzufügen'}</button>
+                                            {editingEmpId && <button type="button" onClick={resetForm} className={`p-3 rounded-lg border ${theme.textMuted} hover:bg-stone-100 dark:hover:bg-stone-800`}>Abbrechen</button>}
+                                        </div>
+                                    </div>
+                                    {error && <div className="text-red-500 text-sm p-2 bg-red-50 rounded border border-red-100">{error}</div>}
+                                </form>
+                                <div className="divide-y divide-stone-200 dark:divide-stone-700">
+                                    {employees.map(emp => (
+                                        <div key={emp.id} className="py-3 flex justify-between items-center">
+                                            <div><div className="font-bold">{emp.name}</div><div className={`text-xs ${theme.textMuted}`}>PIN: {emp.pin} ({emp.role})</div></div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => startEdit(emp)} className="text-blue-500 p-2"><Edit2 size={18}/></button>
+                                                {emp.role !== 'admin' && <button onClick={() => deleteEmployee(emp.id)} className="text-red-500 p-2"><Trash2 size={18}/></button>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'tables' && <TableEditor initialLayout={tableLayout} db={db} theme={theme} isDarkMode={isDarkMode} />}
+
+                        {activeTab === 'logs' && (
+                            <div className={`p-6 rounded-xl shadow-sm border ${theme.card}`}>
+                                <h3 className="font-bold text-lg mb-4">Protokoll</h3>
+                                <div className="space-y-4">
+                                    {logs.map(log => (
+                                        <div key={log.id} className={`p-3 rounded-lg border flex justify-between items-start ${isDarkMode ? 'border-stone-700 bg-stone-900' : 'border-stone-100 bg-stone-50'}`}>
+                                            <div><div className="flex items-center gap-2"><span className={`text-xs font-bold uppercase px-1.5 py-0.5 rounded ${log.action === 'created' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{log.action === 'created' ? 'Erstellt' : 'Storniert'}</span><span className="font-medium">{log.details}</span></div><div className={`text-xs mt-1 ${theme.textMuted}`}>{log.time}</div></div>
+                                            <div className="text-right font-bold text-sm text-amber-600">{log.user}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // 6. ReservationBook
+        const ReservationBook = ({ currentUser, handleLogout, theme, isDarkMode, toggleDarkMode, setView, addLogEntry, reservations, db, tableLayout }) => {
+            const [currentDate, setCurrentDate] = useState(new Date());
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [showTableSelector, setShowTableSelector] = useState(false); 
+            const [showCalendar, setShowCalendar] = useState(false); 
+            const [editingId, setEditingId] = useState(null);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [activeFilter, setActiveFilter] = useState('active'); 
+            const dateInputRef = useRef(null);
+            const [formData, setFormData] = useState({ name: '', time: '18:00', pax: 2, table: '', phone: '', notes: '' });
+            const [tempSelectedTables, setTempSelectedTables] = useState([]);
+
+            const hours = Array.from({length: 14}, (_, i) => (i + 10).toString().padStart(2, '0')); 
+            const minutes = ['00', '15', '30', '45'];
+
+            const availableTags = [{ id: 'Geburtstag', label: 'Geburtstag', icon: Gift, color: 'text-pink-600 bg-pink-100 border-pink-200' }, { id: 'Fußball', label: 'Fußball', icon: Trophy, color: 'text-blue-600 bg-blue-100 border-blue-200' }, { id: 'Terasse', label: 'Terasse', icon: SunIcon, color: 'text-orange-600 bg-orange-100 border-orange-200' }];
+            const formatDateDE = (date) => date.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' });
+            const handleDateChange = (e) => { if (!e.target.value) return; const [year, month, day] = e.target.value.split('-').map(Number); setCurrentDate(new Date(year, month - 1, day)); };
+            const handlePrevDay = () => { const newDate = new Date(currentDate); newDate.setDate(currentDate.getDate() - 1); setCurrentDate(newDate); };
+            const handleNextDay = () => { const newDate = new Date(currentDate); newDate.setDate(currentDate.getDate() + 1); setCurrentDate(newDate); };
+            const handleInputChange = (e) => { const { name, value } = e.target; setFormData(prev => ({ ...prev, [name]: value })); };
+            const toggleTag = (label) => { setFormData(prev => { let currentNotes = prev.notes || ""; const lines = currentNotes.split('\n'); if (lines.includes(label)) { const newNotes = lines.filter(l => l !== label).join('\n'); return { ...prev, notes: newNotes.trim() }; } else { const newNotes = label + (currentNotes ? '\n' + currentNotes : ''); return { ...prev, notes: newNotes }; } }); };
+            
+            const handleTimeChange = (part, value) => {
+                const [h, m] = formData.time.split(':');
+                if (part === 'h') setFormData(prev => ({ ...prev, time: `${value}:${m}` }));
+                if (part === 'm') setFormData(prev => ({ ...prev, time: `${h}:${value}` }));
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    if (editingId) {
+                        await updateDoc(doc(db, "reservations", editingId), { ...formData, pax: parseInt(formData.pax) });
+                    } else {
+                        const newRes = { ...formData, pax: parseInt(formData.pax), status: 'confirmed', date: currentDate.toDateString(), createdBy: currentUser.name };
+                        await addDoc(collection(db, "reservations"), newRes);
+                        const dateObj = new Date(newRes.date);
+                        const dateStr = dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                        addLogEntry('created', `${newRes.name} (${dateStr} ${newRes.time}, ${newRes.pax}P)`);
+                    }
+                    closeModal();
+                } catch (e) {
+                    console.error("Error saving reservation: ", e);
+                }
+            };
+            const openAddModal = () => { setEditingId(null); setFormData({ name: '', time: '18:00', pax: 2, table: '', phone: '', notes: '' }); setIsModalOpen(true); };
+            const openEditModal = (res) => { if (currentUser.role === 'chef') return; setEditingId(res.id); setFormData({ name: res.name, time: res.time, pax: res.pax, table: res.table, phone: res.phone, notes: res.notes || '' }); setIsModalOpen(true); };
+            const closeModal = () => setIsModalOpen(false);
+            const updateStatus = async (id, newStatus, resName = '', resDate = '', resTime = '', resPax = 0) => {
+                try {
+                    const targetRes = reservations.find(r => r.id === id);
+                    await updateDoc(doc(db, "reservations", id), { status: newStatus });
+                    if (newStatus === 'cancelled' && targetRes) {
+                        const dateObj = new Date(targetRes.date);
+                        const dateStr = dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                        addLogEntry('cancelled', `${targetRes.name} (${dateStr} ${targetRes.time}, ${targetRes.pax}P)`);
+                    }
+                } catch (e) {
+                    console.error("Error updating status: ", e);
+                }
+            };
+            const filteredReservations = useMemo(() => {
+                let filtered = reservations.filter(res => res.date === currentDate.toDateString());
+                if (searchTerm) { const lowerTerm = searchTerm.toLowerCase(); filtered = filtered.filter(res => res.name.toLowerCase().includes(lowerTerm) || res.phone.includes(searchTerm) || res.table.toLowerCase().includes(lowerTerm) || (res.notes && res.notes.toLowerCase().includes(lowerTerm))); }
+                if (activeFilter === 'active') { filtered = filtered.filter(res => res.status === 'confirmed'); }
+                else if (activeFilter === 'completed') {
+                    const threeDaysAgo = new Date(); threeDaysAgo.setDate(threeDaysAgo.getDate() - 3); threeDaysAgo.setHours(0, 0, 0, 0);
+                    const currentSelectedDate = new Date(currentDate); currentSelectedDate.setHours(0, 0, 0, 0);
+                    if (currentSelectedDate < threeDaysAgo) { filtered = []; }
+                    else { filtered = filtered.filter(res => ['arrived', 'cancelled'].includes(res.status)); }
+                }
+                return filtered.sort((a, b) => a.time.localeCompare(b.time));
+            }, [reservations, currentDate, searchTerm, activeFilter]);
+            const stats = useMemo(() => {
+                const dailyRes = reservations.filter(res => res.date === currentDate.toDateString());
+                const openGuests = dailyRes.filter(res => res.status === 'confirmed').reduce((sum, res) => sum + res.pax, 0);
+                const completedGuests = dailyRes.filter(res => res.status === 'arrived').reduce((sum, res) => sum + res.pax, 0);
+                return { openGuests, completedGuests };
+            }, [reservations, currentDate]);
+            const getInputValue = () => { const year = currentDate.getFullYear(); const month = String(currentDate.getMonth() + 1).padStart(2, '0'); const day = String(currentDate.getDate()).padStart(2, '0'); return `${year}-${month}-${day}`; };
+            const renderNoteContent = (noteText) => { if (!noteText) return null; const lines = noteText.split('\n'); return lines.map((line, idx) => { const tag = availableTags.find(t => t.label === line.trim()); if (tag) { const TagIcon = tag.icon; return (<div key={idx} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wide border w-max mb-1 mr-1 ${tag.color} ${theme.tag(tag.color)}`}><TagIcon size={10} />{tag.label}</div>); } return (<div key={idx} className={`text-sm truncate italic ${theme.textMuted}`}>{line}</div>); }); };
+
+            const openTableSelector = () => { const currentTables = formData.table ? formData.table.split('+').map(s => s.trim()) : []; setTempSelectedTables(currentTables); setShowTableSelector(true); };
+            const toggleTableSelection = (tableLabel) => { setTempSelectedTables(prev => { if (prev.includes(tableLabel)) { return prev.filter(t => t !== tableLabel); } else { return [...prev, tableLabel]; } }); };
+            const confirmTableSelection = () => { setFormData(prev => ({ ...prev, table: tempSelectedTables.join(' + ') })); setShowTableSelector(false); };
+
+            return (
+                <div className={`min-h-screen font-sans transition-colors duration-300 ${theme.bg} ${theme.text}`}>
+                    <style>{`.font-mabelle { font-family: 'Avenir Next', 'Avenir', 'Helvetica Neue', sans-serif; font-weight: 200; } html { overflow-y: scroll; } input[type="date"]::-webkit-calendar-picker-indicator { position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0; padding: 0; cursor: pointer; opacity: 0; } input[type="time"] { min-width: 0; width: 100%; } .time-select { text-align: center; text-align-last: center; -moz-text-align-last: center; background-color: transparent; } .grid-bg { background-size: 20px 20px; background-image: linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px); } .dark .grid-bg { background-image: linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px); }`}</style>
+                    <header className={`shadow-sm sticky top-0 z-10 transition-colors duration-300 ${theme.header}`}>
+                        <div className="max-w-5xl mx-auto px-4 py-4 relative">
+                            {/* Mobile Actions: Admin & Dark Mode (LEFT) */}
+                            <div className="absolute top-4 left-4 flex gap-1 md:hidden z-20">
+                                {currentUser.role === 'admin' && <button onClick={() => setView('admin')} className="p-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"><Shield size={20} /></button>}
+                                <button onClick={toggleDarkMode} className={`p-2 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-amber-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'}`}>{isDarkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
+                            </div>
+                            {/* Mobile Action: Logout (RIGHT) */}
+                            <button onClick={handleLogout} className={`absolute top-4 right-4 p-2 rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-50 md:hidden z-20`}><LogOut size={20} /></button>
+
+                            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                                <div className="flex items-center gap-1.5">
+                                    <div className="bg-amber-600 p-2 rounded-lg text-white self-start mt-0.5"><Coffee size={24} /></div>
+                                    <div className="flex flex-col"><h1 className={`text-3xl font-mabelle tracking-widest uppercase leading-none ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>MABELLE</h1><span className="text-amber-600 font-sans text-xs font-bold uppercase tracking-[0.2em] leading-tight pt-1">Reservierungen</span></div>
+                                </div>
+                                <div className={`flex items-center rounded-full px-2 py-1 border shadow-inner transition-colors ${theme.navBg}`}>
+                                    <button onClick={handlePrevDay} className={`p-2 rounded-full transition-all z-10 relative ${isDarkMode ? 'hover:bg-stone-700 text-stone-400' : 'hover:bg-white text-stone-500'} hover:text-amber-600`}><ChevronLeft size={20} /></button>
+                                    <div className={`relative flex items-center justify-center gap-2 px-3 py-1.5 min-w-[180px] font-medium cursor-pointer group hover:text-amber-600 transition-colors rounded-md mx-1 ${isDarkMode ? 'text-stone-300 hover:bg-stone-800' : 'text-stone-700 hover:bg-stone-100'}`} onClick={() => setShowCalendar(true)}>
+                                        <CalendarIcon size={16} className="text-amber-600 shrink-0" /><span className="pointer-events-none select-none text-base whitespace-nowrap">{formatDateDE(currentDate)}</span>
+                                    </div>
+                                    <button onClick={handleNextDay} className={`p-2 rounded-full transition-all z-10 relative ${isDarkMode ? 'hover:bg-stone-700 text-stone-400' : 'hover:bg-white text-stone-500'} hover:text-amber-600`}><ChevronRight size={20} /></button>
+                                </div>
+                                <div className="hidden md:flex gap-2 items-center">
+                                    {currentUser.role === 'admin' && <button onClick={() => setView('admin')} className="p-2.5 rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-50 bg-white" title="Admin Dashboard"><Shield size={20} /></button>}
+                                    <button onClick={toggleDarkMode} className={`p-2.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-amber-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'}`}>{isDarkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
+                                    <button onClick={handleLogout} className="p-2.5 rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-100 bg-white" title="Abmelden"><LogOut size={20} /></button>
+                                    {currentUser.role !== 'chef' && <button onClick={openAddModal} className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg shadow-md flex items-center gap-2 font-medium transition-colors"><Plus size={20} /><span>Neue Reservierung</span></button>}
+                                </div>
+                            </div>
+
+                            <div className="mt-6 flex flex-col md:flex-row justify-between items-end gap-4">
+                                <div className="flex justify-between items-stretch w-full md:w-auto md:justify-start gap-3">
+                                    <div className={`flex-1 md:flex-initial border rounded-lg px-3 py-1 flex items-center gap-2 shadow-sm min-w-[140px] transition-colors ${theme.card}`}>
+                                        <div className={`p-1.5 rounded-md ${isDarkMode ? 'bg-amber-900/40 text-amber-500' : 'bg-amber-100 text-amber-700'}`}><Users size={16} /></div>
+                                        <div><div className={`text-[10px] uppercase font-semibold ${theme.textMuted}`}>{activeFilter === 'active' ? 'Gäste Offen' : 'Gäste (Erledigt)'}</div><div className={`text-lg font-bold ${isDarkMode ? 'text-stone-100' : 'text-stone-800'}`}>{activeFilter === 'active' ? stats.openGuests : stats.completedGuests}</div></div>
+                                    </div>
+                                    {currentUser.role !== 'chef' && <button onClick={openAddModal} className="md:hidden bg-amber-600 hover:bg-amber-700 text-white px-6 py-1 rounded-lg shadow-md flex items-center justify-center gap-2 font-medium transition-colors whitespace-nowrap"><Plus size={20} /> <span>Neu</span></button>}
+                                </div>
+                                <div className="relative w-full md:w-72">
+                                    <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${theme.textMuted}`} size={18} />
+                                    <input type="text" placeholder="Name, Tisch, Notiz..." className={`w-full pl-10 pr-4 py-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm text-sm transition-colors ${theme.input}`} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-5xl mx-auto px-4 py-6">
+                        <div className={`flex p-1 rounded-xl mb-6 w-max ${isDarkMode ? 'bg-stone-800' : 'bg-stone-200/50'}`}>
+                            <button onClick={() => setActiveFilter('active')} className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${activeFilter === 'active' ? (isDarkMode ? 'bg-stone-700 text-stone-100 shadow-sm' : 'bg-white text-stone-900 shadow-sm') : (isDarkMode ? 'text-stone-400 hover:text-stone-200' : 'text-stone-500 hover:text-stone-700')}`}>Offen</button>
+                            <button onClick={() => setActiveFilter('completed')} className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${activeFilter === 'completed' ? (isDarkMode ? 'bg-stone-700 text-stone-100 shadow-sm' : 'bg-white text-stone-900 shadow-sm') : (isDarkMode ? 'text-stone-400 hover:text-stone-200' : 'text-stone-500 hover:text-stone-700')}`}>Erledigt</button>
+                        </div>
+                        <div className={`md:rounded-xl md:shadow-sm md:border md:overflow-hidden transition-colors ${isDarkMode ? 'md:border-stone-700 md:bg-stone-800' : 'md:border-stone-200 md:bg-white'}`}>
+                            <div className={`hidden md:grid grid-cols-12 gap-2 p-4 border-b text-xs font-bold uppercase tracking-wider items-center ${theme.tableHeader}`}>
+                                <div className="col-span-1">Zeit</div><div className="col-span-3">Name</div><div className="col-span-1 text-center">Pers.</div><div className="col-span-1 text-center">Tisch</div><div className="col-span-2">Telefon</div><div className="col-span-2">Notizen</div><div className="col-span-2 text-right">Status</div>
+                            </div>
+                            <div className={`md:divide-y ${isDarkMode ? 'md:divide-stone-700' : 'md:divide-stone-100'}`}>
+                                {filteredReservations.length === 0 ? (
+                                    <div className={`p-12 text-center ${theme.textMuted}`}><div className="flex justify-center mb-4"><Archive size={48} className="opacity-20" /></div><p>{activeFilter === 'completed' ? "Keine erledigten Reservierungen (oder älter als 3 Tage)." : "Keine offenen Reservierungen für diesen Tag."}</p></div>
+                                ) : (
+                                    filteredReservations.map((res) => (
+                                        <div key={res.id} onClick={() => openEditModal(res)} className={`cursor-pointer flex flex-col gap-1 p-3 rounded-xl border mb-2 shadow-sm relative ${isDarkMode ? 'bg-stone-800 border-stone-700' : 'bg-white border-stone-200'} md:grid md:grid-cols-12 md:gap-2 md:p-4 md:items-start md:border-0 md:rounded-none md:shadow-none md:mb-0 md:bg-transparent transition-colors group ${theme.rowHover} ${res.status === 'cancelled' ? (isDarkMode ? 'opacity-40 bg-stone-900 md:bg-stone-900' : 'opacity-50 bg-stone-50 md:bg-stone-50') : ''} ${res.status === 'arrived' ? (isDarkMode ? 'bg-emerald-900/20 md:bg-emerald-900/20' : 'bg-emerald-50/30 md:bg-emerald-50/30') : ''}`}>
+                                            <div className="flex justify-between items-center md:hidden overflow-hidden mb-0.5"><div className="flex items-center gap-3 overflow-hidden"><div className={`font-bold text-lg whitespace-nowrap flex items-center gap-1 ${isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}><Clock size={16} className="text-amber-600" /> {res.time}</div><div className={`font-medium text-lg truncate hover:text-amber-600 transition-colors ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>{res.name}</div></div>{res.status === 'arrived' && <CheckCircle size={18} className="text-emerald-500 shrink-0" />}</div>
+                                            <div className={`hidden md:flex col-span-1 font-bold items-center gap-1 py-1 ${isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}><Clock size={14} className={theme.textMuted} />{res.time}</div>
+                                            <div className={`hidden md:block col-span-3 font-medium py-1 ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}><div className="hover:text-amber-600 transition-colors">{res.name}</div></div>
+                                            <div className="flex flex-wrap gap-2 md:hidden items-center leading-tight"><span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-base font-bold ${isDarkMode ? 'bg-stone-700 text-stone-300' : 'bg-stone-100 text-stone-600'}`}><Users size={16}/> {res.pax}</span><span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-base font-mono ${isDarkMode ? 'bg-stone-700 text-stone-300' : 'bg-stone-100 text-stone-600'}`}>{res.table || 'Kein Tisch'}</span>{res.phone && <span className={`inline-flex items-center gap-1.5 text-base ${theme.textMuted} ml-1`}><Phone size={16}/> {res.phone}</span>}</div>
+                                            <div className="hidden md:block col-span-1 text-center py-1"><span className={`inline-flex items-center justify-center px-2 py-1 rounded-md text-sm font-bold w-10 ${isDarkMode ? 'bg-stone-700 text-stone-300' : 'bg-stone-100 text-stone-600'}`}>{res.pax}</span></div>
+                                            <div className={`hidden md:block col-span-1 text-center font-mono text-sm py-1 ${isDarkMode ? 'text-stone-400' : 'text-stone-600'}`}>{res.table || '-'}</div>
+                                            <div className={`hidden md:flex col-span-2 text-sm truncate items-center gap-1 py-1 ${theme.textMuted}`}>{res.phone && <Phone size={12} />}{res.phone || '-'}</div>
+                                            <div className="md:col-span-2 flex flex-col justify-center">{renderNoteContent(res.notes)}{res.createdBy && editingId === res.id && <div className="text-[10px] text-amber-600 mt-1">Erstellt von: {res.createdBy}</div>}</div>
+                                            {currentUser.role !== 'chef' && <div className="flex md:col-span-2 md:justify-end gap-2 py-0.5 mt-1 border-t pt-1 md:border-0 md:pt-0 border-dashed border-stone-200 dark:border-stone-700" onClick={(e) => e.stopPropagation()}>
+                                                {res.status === 'confirmed' && <button onClick={() => updateStatus(res.id, 'arrived')} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all tooltip flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-emerald-900/30 hover:text-emerald-400 hover:border-emerald-800' : 'bg-white border-stone-200 text-stone-400 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200'}`} title="Gast ist da"><Users size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">Anwesend</span></button>}
+                                                <button onClick={() => openEditModal(res)} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-stone-700 hover:text-stone-300 hover:border-stone-500' : 'bg-white border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-600 hover:border-stone-300'}`} title="Bearbeiten"><Edit2 size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">Bearbeiten</span></button>
+                                                {res.status === 'confirmed' && <button onClick={() => updateStatus(res.id, 'cancelled', res.name)} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-red-900/30 hover:text-red-400 hover:border-red-800' : 'bg-white border-stone-200 text-stone-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200'}`} title="Stornieren"><X size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">Storno</span></button>}
+                                            </div>}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </main>
+
+                    {/* CUSTOM CALENDAR OVERLAY */}
+                    {showCalendar && (
+                        <CustomCalendar 
+                            currentDate={currentDate} 
+                            onDateSelect={(d) => { setCurrentDate(d); }} 
+                            onClose={() => setShowCalendar(false)} 
+                            reservations={reservations}
+                            theme={theme}
+                            isDarkMode={isDarkMode}
+                        />
+                    )}
+
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div className={`rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200 ${theme.card}`}>
+                                <div className="bg-amber-600 px-6 py-4 flex justify-between items-center"><h2 className="text-white font-bold text-lg flex items-center gap-2">{editingId ? <Edit2 size={20}/> : <Plus size={20}/>} {editingId ? 'Reservierung bearbeiten' : 'Neue Reservierung'}</h2><button onClick={closeModal} className="text-amber-100 hover:text-white transition-colors"><X size={24}/></button></div>
+                                <form onSubmit={handleSubmit} className="p-6">
+                                    <div className="grid grid-cols-2 gap-2 md:gap-4">
+                                        <div className="col-span-2"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Name des Gastes</label><input required name="name" value={formData.name} onChange={handleInputChange} type="text" className={`w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} placeholder="z.B. Max Mustermann" autoFocus /></div>
+                                        <div className="col-span-2 flex gap-2">
+                                            {/* ZWEITEILIGER ZEIT-BALKEN */}
+                                            <div className="w-1/2 min-w-0"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Uhrzeit</label>
+                                                <div className={`flex items-center w-full rounded-lg border px-1 py-2 focus-within:ring-2 focus-within:ring-amber-500 ${theme.input}`}>
+                                                    <select value={formData.time.split(':')[0]} onChange={(e) => handleTimeChange('h', e.target.value)} className="w-1/2 text-center bg-transparent border-0 outline-none appearance-none time-select cursor-pointer">{hours.map(h => <option key={h} value={h} className={isDarkMode ? 'bg-stone-800' : 'bg-white'}>{h}</option>)}</select>
+                                                    <span className="font-bold opacity-50 px-1">:</span>
+                                                    <select value={formData.time.split(':')[1]} onChange={(e) => handleTimeChange('m', e.target.value)} className="w-1/2 text-center bg-transparent border-0 outline-none appearance-none time-select cursor-pointer">{minutes.map(m => <option key={m} value={m} className={isDarkMode ? 'bg-stone-800' : 'bg-white'}>{m}</option>)}</select>
+                                                </div>
+                                            </div>
+                                            <div className="w-1/2 min-w-0"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Personen</label><div className="flex items-center w-full"><button type="button" onClick={() => setFormData(p => ({...p, pax: Math.max(1, parseInt(p.pax)-1)}))} className={`w-8 h-10 rounded-l-lg font-bold border-y border-l transition-colors ${isDarkMode ? 'bg-stone-700 border-stone-600 text-stone-300 hover:bg-stone-600' : 'bg-stone-100 border-stone-200 text-stone-600 hover:bg-stone-200'}`}>-</button><input type="number" name="pax" value={formData.pax} onChange={handleInputChange} className={`w-full min-w-0 text-center border-y h-10 outline-none ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-100' : 'bg-white border-stone-200'}`} /><button type="button" onClick={() => setFormData(p => ({...p, pax: parseInt(p.pax)+1}))} className={`w-8 h-10 rounded-r-lg font-bold border-y border-r transition-colors ${isDarkMode ? 'bg-stone-700 border-stone-600 text-stone-300 hover:bg-stone-600' : 'bg-stone-100 border-stone-200 text-stone-600 hover:bg-stone-200'}`}>+</button></div></div></div>
+                                        <div className="col-span-2 flex gap-2">
+                                            {/* TISCH AUSWAHL MIT MAP ICON UND NEUEM SQUARE ICON */}
+                                            <div className="w-1/2 min-w-0 relative"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Tisch</label>
+                                                <div className="flex relative">
+                                                    <input type="text" name="table" value={formData.table} onChange={handleInputChange} placeholder="z.B. T12" className={`w-full min-w-0 rounded-lg border px-3 py-2 pr-10 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} />
+                                                    <button type="button" onClick={() => openTableSelector()} className={`absolute right-1 top-1 p-1.5 rounded hover:bg-stone-200 dark:hover:bg-stone-700 text-amber-600 transition-colors`}><Square size={18}/></button>
+                                                </div>
+                                            </div>
+                                            <div className="w-1/2 min-w-0"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Telefon</label><input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="017..." className={`w-full min-w-0 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} /></div></div>
+                                        <div className="col-span-2"><label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Schnellnotiz (Klicken zum Einfügen)</label><div className="flex gap-2">{availableTags.map(tag => { const isActive = (formData.notes || '').includes(tag.label); const TagIcon = tag.icon; return (<button key={tag.id} type="button" onClick={() => toggleTag(tag.label)} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${isActive ? `${tag.color} ring-2 ring-offset-1 ring-amber-500/50` : `bg-transparent border-dashed ${isDarkMode ? 'border-stone-600 text-stone-400 hover:bg-stone-800' : 'border-stone-300 text-stone-500 hover:bg-stone-50'}`}`}><TagIcon size={16} /> {tag.label}</button>); })}</div></div>
+                                        <div className="col-span-2"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Notizen</label><textarea name="notes" value={formData.notes} onChange={handleInputChange} rows="3" className={`w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none resize-none ${theme.input}`} placeholder="Weitere Details hier eingeben..."></textarea></div>
+                                    </div>
+                                    <div className="mt-8 flex gap-3 justify-end"><button type="button" onClick={closeModal} className={`px-5 py-2 rounded-lg transition-colors ${isDarkMode ? 'text-stone-400 hover:bg-stone-700' : 'text-stone-600 hover:bg-stone-100'}`}>Abbrechen</button><button type="submit" className="px-5 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-md transition-colors font-medium">{editingId ? 'Änderungen speichern' : 'Reservierung hinzufügen'}</button></div>
+                                    {editingId && <div className={`mt-4 text-xs text-center ${theme.textMuted}`}>Reservierung erstellt von: <span className="font-bold">{reservations.find(r => r.id === editingId)?.createdBy || 'Unbekannt'}</span></div>}
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* TABLE SELECTOR OVERLAY */}
+                    {showTableSelector && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col">
+                            <div className="p-4 flex justify-between items-center text-white bg-stone-900 border-b border-stone-800">
+                                <h2 className="text-lg font-bold flex items-center gap-2"><Square/> Tisch auswählen</h2>
+                                <div className="flex gap-3 items-center">
+                                    <button onClick={confirmTableSelection} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1"><Check size={16}/> Übernehmen</button>
+                                    <button onClick={() => setShowTableSelector(false)} className="p-2 bg-stone-800 rounded-full hover:bg-stone-700"><X/></button>
+                                </div>
+                            </div>
+                            <div className="flex-1 overflow-auto p-4 bg-stone-900 relative">
+                                <div className={`relative w-full h-[500px] md:h-[700px] border-2 border-stone-700 rounded-lg overflow-hidden grid-bg bg-stone-800`}>
+                                    {tableLayout && tableLayout.length > 0 ? tableLayout.map(table => {
+                                        const isSelected = tempSelectedTables.includes(table.label);
+                                        return (
+                                        <div
+                                            key={table.id}
+                                            onClick={() => table.type === 'table' && toggleTableSelection(table.label)}
+                                            style={{ 
+                                                left: `${table.x}%`, top: `${table.y}%`, 
+                                                width: `${table.w}px`, height: `${table.h}px`,
+                                                borderRadius: table.subtype === 'round' ? '50%' : '4px',
+                                                transform: `translate(-50%, -50%) rotate(${table.rotation || 0}deg)`,
+                                                zIndex: isSelected ? 30 : (table.type === 'area' ? 1 : 10),
+                                                backgroundColor: table.type === 'window' ? '#38bdf8' : (table.type === 'wall' ? '#78716c' : (table.type === 'area' ? 'rgba(255,255,255,0.05)' : '')),
+                                                borderStyle: table.type === 'area' ? 'dashed' : 'solid'
+                                            }}
+                                            className={`absolute flex flex-col items-center justify-center text-xs font-bold cursor-pointer transition-transform active:scale-95 
+                                                ${table.type === 'table' ? (isSelected ? 'bg-amber-500 border-2 border-amber-300 text-white ring-2 ring-amber-200' : 'bg-stone-700 border-2 border-emerald-500 text-emerald-100 hover:bg-emerald-900 hover:border-emerald-400') : ''}
+                                                ${table.type === 'door' ? '' : ''}
+                                            `}
+                                        >
+                                            {table.type === 'door' ? (
+                                                 <div className="w-full h-full relative flex">
+                                                    <div className="w-1/2 h-full relative border-r border-stone-400/30">
+                                                        <div className="absolute left-0 bottom-0 w-[20%] h-full bg-stone-800 dark:bg-stone-200"></div> 
+                                                        <div className="absolute left-0 bottom-0 w-full h-full border-t-2 border-r-2 border-stone-800 dark:border-stone-400 rounded-tr-full opacity-50 origin-bottom-left"></div>
+                                                    </div>
+                                                    <div className="w-1/2 h-full relative">
+                                                        <div className="absolute right-0 bottom-0 w-[20%] h-full bg-stone-800 dark:bg-stone-200"></div> 
+                                                        <div className="absolute right-0 bottom-0 w-full h-full border-t-2 border-l-2 border-stone-800 dark:border-stone-400 rounded-tl-full opacity-50 origin-bottom-right"></div>
+                                                    </div>
+                                                 </div>
+                                            ) : (
+                                                <>
+                                                    {table.label}
+                                                    {table.seats > 0 && <span className="text-[9px] opacity-70 font-normal">{table.seats}P</span>}
+                                                </>
+                                            )}
+                                        </div>
+                                    )}) : (
+                                        <div className="flex flex-col items-center justify-center h-full text-stone-500">
+                                            <p>Kein Tischplan vorhanden.</p>
+                                            <p className="text-sm mt-2">Bitte im Admin-Bereich erstellen.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // 6. App
+        const App = () => {
+            const [view, setView] = useState('landing'); 
+            const [currentUser, setCurrentUser] = useState(null);
+            
+            const [employees, setEmployees] = useState([]);
+            const [logs, setLogs] = useState([]);
+            const [reservations, setReservations] = useState([]);
+            const [tableLayout, setTableLayout] = useState([]); 
+            const [isLoading, setIsLoading] = useState(true);
+            
+            const [isDarkMode, setIsDarkMode] = useState(() => {
+                const stored = localStorage.getItem('mabelle_darkmode');
+                return stored ? JSON.parse(stored) : false;
+            });
+            useEffect(() => localStorage.setItem('mabelle_darkmode', isDarkMode), [isDarkMode]);
+
+            const [pinInput, setPinInput] = useState('');
+            const [loginError, setLoginError] = useState(false);
+            const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
+
+            useEffect(() => {
+                signInAnonymously(auth).then(() => {
+                    const unsubEmp = onSnapshot(collection(db, "employees"), (snapshot) => {
+                        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setEmployees(data);
+                        if (data.length === 0) {
+                            addDoc(collection(db, "employees"), { name: 'Chef', pin: '9999', role: 'admin' });
+                        }
+                    });
+
+                    const unsubRes = onSnapshot(collection(db, "reservations"), (snapshot) => {
+                        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setReservations(data);
+                    });
+
+                    const unsubLog = onSnapshot(query(collection(db, "logs"), orderBy("timestamp", "desc"), limit(50)), (snapshot) => {
+                        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setLogs(data);
+                    });
+
+                    const localTables = localStorage.getItem('mabelle_tables_autosave');
+                    if (localTables) setTableLayout(JSON.parse(localTables));
+                    
+                    const unsubTables = onSnapshot(doc(db, "settings", "tables"), (docSnap) => {
+                        if (docSnap.exists()) {
+                            setTableLayout(docSnap.data().layout || []);
+                        }
+                    });
+
+                    // SSO Check
+                    const params = new URLSearchParams(window.location.search);
+                    const token = params.get('auth_token');
+                    if (token) {
+                        try {
+                            const HUB_APP_ID = 'DEINE_HUB_APP_ID'; // Placeholder
+                            const tokenRef = doc(db, 'artifacts', HUB_APP_ID, 'public', 'data', 'auth_tokens', token);
+                            getDoc(tokenRef).then(async (tokenSnap) => {
+                                if (tokenSnap.exists()) {
+                                    const data = tokenSnap.data();
+                                    const now = new Date();
+                                    const expiresAt = new Date(data.expiresAt); 
+                                    
+                                    if (now < expiresAt && !data.used) {
+                                        console.log("SSO Login success:", data.userName);
+                                        setCurrentUser({
+                                            id: data.userId || 'sso',
+                                            name: data.userName || 'Gast',
+                                            role: data.isAdmin ? 'admin' : 'staff', // Map role
+                                            pin: 'SSO'
+                                        });
+                                        setView('book');
+                                        
+                                        await deleteDoc(tokenRef);
+                                        window.history.replaceState({}, document.title, window.location.pathname);
+                                    }
+                                }
+                            });
+                        } catch(e) {
+                            console.error("SSO Error", e);
+                        }
+                    }
+
+                    setIsLoading(false);
+                }).catch((error) => {
+                    console.error("Auth Error", error);
+                    setIsLoading(false);
+                });
+            }, []);
+
+            // Auto Login
+            useEffect(() => {
+                if (pinInput.length === 4) {
+                    const user = employees.find(emp => emp.pin === pinInput);
+                    if (user) {
+                        setCurrentUser(user);
+                        setPinInput('');
+                        setLoginError(false);
+                        setView('book');
+                    } else {
+                        setLoginError(true);
+                        setTimeout(() => { setPinInput(''); setLoginError(false); }, 600);
+                    }
+                }
+            }, [pinInput, employees]);
+
+            const addLogEntry = async (action, details) => {
+                try {
+                    await addDoc(collection(db, "logs"), {
+                        action, details, user: currentUser ? currentUser.name : 'Unknown', time: new Date().toLocaleString(), timestamp: Date.now()
+                    });
+                } catch(e) { console.error("Log Error", e); }
+            };
+
+            const handleLogout = () => { setCurrentUser(null); setView('landing'); };
+            const handleNumpadClick = (num) => { if (pinInput.length < 4) setPinInput(prev => prev + num); };
+
+            const theme = {
+                bg: isDarkMode ? 'bg-stone-900' : 'bg-stone-100',
+                text: isDarkMode ? 'text-stone-100' : 'text-stone-800',
+                textMuted: isDarkMode ? 'text-stone-400' : 'text-stone-500',
+                card: isDarkMode ? 'bg-stone-800 border-stone-700' : 'bg-white border-stone-200',
+                header: isDarkMode ? 'bg-stone-800 border-stone-700' : 'bg-white border-stone-200',
+                input: isDarkMode ? 'bg-stone-900 border-stone-700 text-stone-100 focus:ring-amber-500' : 'bg-white border-stone-200 text-stone-800 focus:ring-amber-500',
+                hover: isDarkMode ? 'hover:bg-stone-700' : 'hover:bg-stone-100',
+                tableHeader: isDarkMode ? 'bg-stone-900 text-stone-400 border-stone-700' : 'bg-stone-50 text-stone-500 border-stone-200',
+                rowHover: isDarkMode ? 'hover:bg-amber-900/20' : 'hover:bg-amber-50/30',
+                navBg: isDarkMode ? 'bg-stone-900 border-stone-700' : 'bg-stone-50 border-stone-200',
+                tag: (color) => isDarkMode ? 'bg-opacity-20 border-opacity-20' : ''
+            };
+
+            if (isLoading) return <div className={`min-h-screen flex items-center justify-center ${theme.bg} ${theme.text}`}>Lade...</div>;
+
+            if (view === 'landing') {
+                return (
+                <div className={`min-h-screen flex flex-col items-center justify-center cursor-pointer transition-colors duration-500 ${theme.bg}`} onClick={() => setView('login')}>
+                    <div className="text-center animate-in fade-in zoom-in duration-700">
+                        <div className="bg-amber-600 p-4 rounded-2xl text-white inline-block mb-6 shadow-xl"><Coffee size={48} /></div>
+                        <h1 className={`text-5xl md:text-7xl font-mabelle tracking-widest uppercase mb-2 ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>MABELLE</h1>
+                        <span className="text-amber-600 font-sans text-sm md:text-base font-bold uppercase tracking-[0.4em]">Reservierungen</span>
+                        <p className={`mt-12 text-sm animate-pulse ${theme.textMuted}`}>Zum Starten tippen</p>
+                    </div>
+                </div>
+                );
+            }
+
+            if (view === 'login') {
+                return (
+                <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${theme.bg}`}>
+                    <div className={`w-full max-w-sm p-8 rounded-2xl shadow-xl ${theme.card}`}>
+                        <h2 className={`text-center text-2xl font-bold mb-6 ${theme.text}`}>Mitarbeiter Login</h2>
+                        <div className="flex justify-center gap-4 mb-8">
+                            {[0, 1, 2, 3].map(i => (<div key={i} className={`w-4 h-4 rounded-full border transition-all duration-200 ${pinInput.length > i ? 'bg-amber-600 border-amber-600 scale-110' : `border-stone-300 ${loginError ? 'border-red-500 bg-red-50' : ''}`}`}></div>))}
+                        </div>
+                        {loginError && <p className="text-red-500 text-center text-sm mb-4 font-medium animate-pulse">Falsche PIN</p>}
+                        <div className="grid grid-cols-3 gap-4 mb-6">
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (<button key={num} onClick={() => handleNumpadClick(String(num))} className={`h-16 rounded-xl text-xl font-bold transition-all active:scale-95 ${isDarkMode ? 'bg-stone-700 text-stone-100 hover:bg-stone-600' : 'bg-stone-100 text-stone-800 hover:bg-stone-200'}`}>{num}</button>))}
+                            <div className="col-start-2"><button onClick={() => handleNumpadClick('0')} className={`w-full h-16 rounded-xl text-xl font-bold transition-all active:scale-95 ${isDarkMode ? 'bg-stone-700 text-stone-100 hover:bg-stone-600' : 'bg-stone-100 text-stone-800 hover:bg-stone-200'}`}>0</button></div>
+                            <div><button onClick={() => setPinInput('')} className={`w-full h-16 rounded-xl flex items-center justify-center text-red-500 hover:bg-red-50 transition-all ${isDarkMode ? 'hover:bg-stone-700' : ''}`}><X size={24} /></button></div>
+                        </div>
+                        <div className="flex flex-col gap-3">
+                            <button onClick={() => setView('landing')} className={`w-full py-3 rounded-xl font-medium transition-colors ${theme.textMuted} ${theme.hover}`}>Abbrechen</button>
+                        </div>
+                    </div>
+                </div>
+                );
+            }
+
+            if (view === 'admin') {
+                return <AdminView employees={employees} logs={logs} setView={setView} theme={theme} isDarkMode={isDarkMode} db={db} tableLayout={tableLayout} />;
+            }
+
+            return <ReservationBook currentUser={currentUser} handleLogout={handleLogout} theme={theme} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} setView={setView} addLogEntry={addLogEntry} reservations={reservations} db={db} tableLayout={tableLayout} />;
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
