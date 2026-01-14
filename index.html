@@ -480,15 +480,20 @@
                     const pinExists = employees.some(emp => emp.pin === empPin && emp.id !== editingEmpId);
                     if (pinExists) { setError('Diese PIN wird bereits verwendet!'); return; }
                     try {
-                        if (editingEmpId) await updateDoc(doc(db, "employees", editingEmpId), { name: empName, pin: empPin, role: empRole });
-                        else await addDoc(collection(db, "employees"), { name: empName, pin: empPin, role: empRole });
+                        if (editingEmpId) {
+                            await updateDoc(doc(db, "employees", editingEmpId), { name: empName, pin: empPin, role: empRole });
+                        } else {
+                            await addDoc(collection(db, "employees"), { name: empName, pin: empPin, role: empRole });
+                        }
                         resetForm();
-                    } catch (e) { console.error(e); }
+                    } catch (e) {
+                        console.error("Error saving employee: ", e);
+                    }
                 }
             };
             const resetForm = () => { setEmpName(''); setEmpPin(''); setEmpRole('staff'); setEditingEmpId(null); setError(''); };
             const startEdit = (emp) => { setEmpName(emp.name); setEmpPin(emp.pin); setEmpRole(emp.role); setEditingEmpId(emp.id); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-            const deleteEmployee = async (id) => { if (window.confirm('Löschen?')) await deleteDoc(doc(db, "employees", id)); };
+            const deleteEmployee = async (id) => { if (window.confirm('Mitarbeiter wirklich löschen?')) { await deleteDoc(doc(db, "employees", id)); if (editingEmpId === id) resetForm(); } };
 
             return (
                 <div className={`min-h-screen p-4 ${theme.bg} ${theme.text}`}>
@@ -838,7 +843,7 @@
             );
         };
 
-        // --- 6. App ---
+        // --- 6. App Component (ZULETZT) ---
         const App = () => {
             const [view, setView] = useState('landing'); 
             const [currentUser, setCurrentUser] = useState(null);
@@ -887,34 +892,6 @@
                             setTableLayout(docSnap.data().layout || []);
                         }
                     });
-                    
-                    // SSO Check
-                    const params = new URLSearchParams(window.location.search);
-                    const token = params.get('auth_token');
-                    if (token) {
-                        try {
-                            const hubAppId = 'mabelle-hub-live'; 
-                            const tokenRef = doc(db, 'artifacts', hubAppId, 'public', 'data', 'auth_tokens', token);
-                            getDoc(tokenRef).then(async (tokenSnap) => {
-                                if (tokenSnap.exists()) {
-                                    const data = tokenSnap.data();
-                                    const now = new Date();
-                                    const expiresAt = new Date(data.expiresAt); 
-                                    if (now < expiresAt && !data.used) {
-                                        setCurrentUser({
-                                            id: data.userId || 'sso',
-                                            name: data.userName || 'Gast',
-                                            role: data.isAdmin ? 'admin' : 'staff', 
-                                            pin: 'SSO'
-                                        });
-                                        setView('book');
-                                        await deleteDoc(tokenRef);
-                                        window.history.replaceState({}, document.title, window.location.pathname);
-                                    }
-                                }
-                            });
-                        } catch(e) { console.error("SSO Error", e); }
-                    }
 
                     setIsLoading(false);
                 }).catch((error) => {
