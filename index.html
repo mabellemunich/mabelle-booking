@@ -5,18 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MABELLE Booking</title>
     
-    <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23d97706%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M17 8h1a4 4 0 1 1 0 8h-1%22/><path d=%22M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z%22/><line x1=%226%22 x2=%226%22 y1=%222%22 y2=%224%22/><line x1=%2210%22 x2=%2210%22 y1=%222%22 y2=%224%22/><line x1=%2214%22 x2=%2214%22 y1=%222%22 y2=%224%22/></svg>">
 
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; touch-action: manipulation; }
@@ -26,18 +21,8 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .time-select { text-align: center; text-align-last: center; -moz-text-align-last: center; background-color: transparent; }
-        
-        .grid-bg {
-            background-size: 20px 20px;
-            background-image:
-                linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
-        }
-        .dark .grid-bg {
-            background-image:
-                linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px);
-        }
+        .grid-bg { background-size: 20px 20px; background-image: linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px); }
+        .dark .grid-bg { background-image: linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px); }
     </style>
 </head>
 <body>
@@ -76,9 +61,7 @@
             app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
-        } catch (err) {
-            console.error("Firebase Init Error", err);
-        }
+        } catch (err) { console.error("Firebase Init Error", err); }
 
         // --- ICONS ---
         const IconBase = ({ size = 24, className = "", children, ...props }) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>);
@@ -114,10 +97,8 @@
         const Maximize = (p) => <IconBase {...p}><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></IconBase>;
         const Minus = (p) => <IconBase {...p}><path d="M5 12h14"/></IconBase>;
         const Copy = (p) => <IconBase {...p}><rect width="13" height="13" x="9" y="9" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconBase>;
-        const CloudOff = (p) => <IconBase {...p}><path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 7h1.8a5 5 0 0 0 1.8 9h2.1"/><line x1="2" x2="22" y1="2" y2="22"/></IconBase>;
-        const Cloud = (p) => <IconBase {...p}><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></IconBase>;
 
-        // --- 1. MAP RENDERER ---
+        // 1. MapRenderer
         const MapRenderer = ({ tables, onTableClick, selectedTableId, isEditor, onDragMove, onDragEnd }) => {
             const containerRef = useRef(null);
             const [scale, setScale] = useState(1);
@@ -135,7 +116,7 @@
                 handleResize();
                 window.addEventListener('resize', handleResize);
                 return () => window.removeEventListener('resize', handleResize);
-            }, []); 
+            }, []);
 
             const handleMouseDown = (e, id) => {
                 if (!isEditor) {
@@ -159,6 +140,7 @@
                 let y = ((clientY - rect.top) / rect.height) * 100;
                 x = Math.max(0, Math.min(100, x));
                 y = Math.max(0, Math.min(100, y));
+                
                 if (onDragMove) onDragMove(dragItem.current, x, y);
             };
 
@@ -353,7 +335,7 @@
                 } catch(e) { 
                     console.error(e); 
                     setSaveStatus('error');
-                    alert("Achtung: Cloud-Speicherung fehlgeschlagen (Rechte?), aber LOKAL im Browser gespeichert. " + e.message); 
+                    alert("Fehler beim Speichern: " + e.message); 
                 }
             };
 
@@ -600,7 +582,7 @@
             const openAddModal = () => { setEditingId(null); setFormData({ name: '', time: '18:00', pax: 2, table: '', phone: '', notes: '' }); setIsModalOpen(true); };
             const openEditModal = (res) => { if (currentUser.role === 'chef') return; setEditingId(res.id); setFormData({ name: res.name, time: res.time, pax: res.pax, table: res.table, phone: res.phone, notes: res.notes || '' }); setIsModalOpen(true); };
             const closeModal = () => setIsModalOpen(false);
-            const updateStatus = async (id, newStatus, resName = '') => {
+            const updateStatus = async (id, newStatus, resName = '', resDate = '', resTime = '', resPax = 0) => {
                 try {
                     const targetRes = reservations.find(r => r.id === id);
                     const now = new Date().toISOString();
@@ -654,10 +636,12 @@
                     <style>{`.font-mabelle { font-family: 'Avenir Next', 'Avenir', 'Helvetica Neue', sans-serif; font-weight: 200; } html { overflow-y: scroll; } input[type="date"]::-webkit-calendar-picker-indicator { position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0; padding: 0; cursor: pointer; opacity: 0; } input[type="time"] { min-width: 0; width: 100%; } .time-select { text-align: center; text-align-last: center; -moz-text-align-last: center; background-color: transparent; } .grid-bg { background-size: 20px 20px; background-image: linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px); } .dark .grid-bg { background-image: linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px); }`}</style>
                     <header className={`shadow-sm sticky top-0 z-10 transition-colors duration-300 ${theme.header}`}>
                         <div className="max-w-5xl mx-auto px-4 py-4 relative">
+                            {/* Mobile Actions: Admin & Dark Mode (LEFT) */}
                             <div className="absolute top-4 left-4 flex gap-1 md:hidden z-20">
                                 {currentUser.role === 'admin' && <button onClick={() => setView('admin')} className="p-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"><Shield size={20} /></button>}
                                 <button onClick={toggleDarkMode} className={`p-2 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-amber-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'}`}>{isDarkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
                             </div>
+                            {/* Mobile Action: Logout (RIGHT) */}
                             <button onClick={handleLogout} className={`absolute top-4 right-4 p-2 rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-50 md:hidden z-20`}><LogOut size={20} /></button>
 
                             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
@@ -876,6 +860,7 @@
             const [currentUser, setCurrentUser] = useState(null);
             
             const [employees, setEmployees] = useState([]);
+            const [logs, setLogs] = useState([]);
             const [reservations, setReservations] = useState([]);
             const [tableLayout, setTableLayout] = useState([]); 
             const [isLoading, setIsLoading] = useState(true);
@@ -905,7 +890,11 @@
                         setReservations(data);
                     });
 
-                    // Tische laden
+                    const unsubLog = onSnapshot(query(collection(db, "logs"), orderBy("timestamp", "desc"), limit(50)), (snapshot) => {
+                        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setLogs(data);
+                    });
+
                     const localTables = localStorage.getItem('mabelle_tables_autosave');
                     if (localTables) setTableLayout(JSON.parse(localTables));
                     
@@ -937,6 +926,14 @@
                     }
                 }
             }, [pinInput, employees]);
+
+            const addLogEntry = async (action, details) => {
+                try {
+                    await addDoc(collection(db, "logs"), {
+                        action, details, user: currentUser ? currentUser.name : 'Unknown', time: new Date().toLocaleString(), timestamp: Date.now()
+                    });
+                } catch(e) { console.error("Log Error", e); }
+            };
 
             const handleLogout = () => { setCurrentUser(null); setView('landing'); };
             const handleNumpadClick = (num) => { if (pinInput.length < 4) setPinInput(prev => prev + num); };
