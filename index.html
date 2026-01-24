@@ -5,12 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MABELLE Booking</title>
     
+    <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23d97706%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M17 8h1a4 4 0 1 1 0 8h-1%22/><path d=%22M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z%22/><line x1=%226%22 x2=%226%22 y1=%222%22 y2=%224%22/><line x1=%2210%22 x2=%2210%22 y1=%222%22 y2=%224%22/><line x1=%2214%22 x2=%2214%22 y1=%222%22 y2=%224%22/></svg>">
 
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
 
     <style>
@@ -21,11 +29,22 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .time-select { text-align: center; text-align-last: center; -moz-text-align-last: center; background-color: transparent; }
-        .grid-bg { background-size: 20px 20px; background-image: linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px); }
-        .dark .grid-bg { background-image: linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px); }
+        
+        .grid-bg {
+            background-size: 20px 20px;
+            background-image:
+                linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
+        }
+        .dark .grid-bg {
+            background-image:
+                linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px);
+        }
     </style>
 </head>
 <body>
+    <!-- Fehler-Anzeige -->
     <div id="error-container" style="display:none; padding:20px; background:#fee2e2; color:#b91c1c; font-family:sans-serif; border-bottom:1px solid #ef4444; position:fixed; top:0; left:0; right:0; z-index:9999;">
         <strong>Fehler:</strong> <span id="error-text"></span>
         <button onclick="window.location.reload()" style="margin-top:10px; display:block; padding:5px 10px; background:#b91c1c; color:white; border:none; border-radius:4px;">Neu laden</button>
@@ -61,7 +80,9 @@
             app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
-        } catch (err) { console.error("Firebase Init Error", err); }
+        } catch (err) {
+            console.error("Firebase Init Error", err);
+        }
 
         // --- ICONS ---
         const IconBase = ({ size = 24, className = "", children, ...props }) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>);
@@ -98,7 +119,11 @@
         const Minus = (p) => <IconBase {...p}><path d="M5 12h14"/></IconBase>;
         const Copy = (p) => <IconBase {...p}><rect width="13" height="13" x="9" y="9" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconBase>;
 
-        // 1. MapRenderer
+        // ------------------------------------------------------------
+        // COMPONENTS - STRIKTE REIHENFOLGE BEACHTEN!
+        // ------------------------------------------------------------
+
+        // 1. MapRenderer (Muss zuerst kommen, da von Editor & Book genutzt)
         const MapRenderer = ({ tables, onTableClick, selectedTableId, isEditor, onDragMove, onDragEnd }) => {
             const containerRef = useRef(null);
             const [scale, setScale] = useState(1);
@@ -335,7 +360,7 @@
                 } catch(e) { 
                     console.error(e); 
                     setSaveStatus('error');
-                    alert("Fehler beim Speichern: " + e.message); 
+                    alert("Achtung: Cloud-Speicherung fehlgeschlagen (Rechte?), aber LOKAL im Browser gespeichert. " + e.message); 
                 }
             };
 
@@ -517,7 +542,7 @@
         };
 
         // 5. ReservationBook
-        const ReservationBook = ({ currentUser, handleLogout, theme, isDarkMode, toggleDarkMode, setView, addLogEntry, reservations, db, tableLayout }) => {
+        const ReservationBook = ({ currentUser, handleLogout, theme, isDarkMode, toggleDarkMode, setView, addLogEntry = () => {}, reservations, db, tableLayout }) => {
             const [currentDate, setCurrentDate] = useState(new Date());
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [showTableSelector, setShowTableSelector] = useState(false); 
@@ -572,7 +597,7 @@
                         
                         const dateObj = new Date(newRes.date);
                         const dateStr = dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
-                        addLogEntry('created', `${newRes.name} (${dateStr} ${newRes.time}, ${newRes.pax}P)`);
+                        if(addLogEntry) addLogEntry('created', `${newRes.name} (${dateStr} ${newRes.time}, ${newRes.pax}P)`);
                     }
                     closeModal();
                 } catch (e) {
@@ -594,7 +619,7 @@
                     if (newStatus === 'cancelled' && targetRes) {
                         const dateObj = new Date(targetRes.date);
                         const dateStr = dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
-                        addLogEntry('cancelled', `${targetRes.name} (${dateStr} ${targetRes.time}, ${targetRes.pax}P)`);
+                        if(addLogEntry) addLogEntry('cancelled', `${targetRes.name} (${dateStr} ${targetRes.time}, ${targetRes.pax}P)`);
                     }
                 } catch (e) {
                     console.error("Error updating status: ", e);
