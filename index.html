@@ -18,17 +18,6 @@
     <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Import Map für Firebase -->
-    <script type="importmap">
-    {
-      "imports": {
-        "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
-        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
-        "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"
-      }
-    }
-    </script>
-
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; touch-action: manipulation; }
         .font-mabelle { font-family: 'Avenir Next', 'Avenir', 'Helvetica Neue', sans-serif; font-weight: 200; }
@@ -37,17 +26,12 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .time-select { text-align: center; text-align-last: center; -moz-text-align-last: center; background-color: transparent; }
-        
         .grid-bg {
             background-size: 20px 20px;
-            background-image:
-                linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
+            background-image: linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
         }
         .dark .grid-bg {
-            background-image:
-                linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px);
+            background-image: linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px);
         }
     </style>
 </head>
@@ -68,11 +52,11 @@
     </script>
 
     <script type="text/babel" data-type="module">
-        import { initializeApp } from "firebase/app";
-        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, limit, setDoc, getDoc } from "firebase/firestore";
-        import { getAuth, signInAnonymously } from "firebase/auth";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, limit, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect, useMemo, useRef, useLayoutEffect } = React;
 
         const firebaseConfig = {
             apiKey: "AIzaSyB9JdhTd0Gl07U8ZKCs5s9QHsw4zVdsIiw",
@@ -134,7 +118,7 @@
             const [isDragging, setIsDragging] = useState(false);
             const dragItem = useRef(null);
 
-            useEffect(() => {
+            useLayoutEffect(() => {
                 const handleResize = () => {
                     if (containerRef.current) {
                         const { width } = containerRef.current.getBoundingClientRect();
@@ -145,7 +129,7 @@
                 handleResize();
                 window.addEventListener('resize', handleResize);
                 return () => window.removeEventListener('resize', handleResize);
-            }, []);
+            }, []); 
 
             const handleMouseDown = (e, id) => {
                 if (!isEditor) {
@@ -169,6 +153,7 @@
                 let y = ((clientY - rect.top) / rect.height) * 100;
                 x = Math.max(0, Math.min(100, x));
                 y = Math.max(0, Math.min(100, y));
+                
                 if (onDragMove) onDragMove(dragItem.current, x, y);
             };
 
@@ -505,7 +490,6 @@
                         <div className="flex gap-2 mb-6 overflow-x-auto">
                             <button onClick={() => setActiveTab('employees')} className={`px-6 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${activeTab === 'employees' ? 'bg-amber-600 text-white' : `${theme.card} ${theme.textMuted}`}`}>Mitarbeiter</button>
                             <button onClick={() => setActiveTab('tables')} className={`px-6 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${activeTab === 'tables' ? 'bg-amber-600 text-white' : `${theme.card} ${theme.textMuted}`}`}>Tischplan</button>
-                            <button onClick={() => setActiveTab('logs')} className={`px-6 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${activeTab === 'logs' ? 'bg-amber-600 text-white' : `${theme.card} ${theme.textMuted}`}`}>Protokoll</button>
                         </div>
 
                         {activeTab === 'employees' && (
@@ -540,20 +524,6 @@
                         )}
 
                         {activeTab === 'tables' && <TableEditor initialLayout={tableLayout} db={db} theme={theme} isDarkMode={isDarkMode} />}
-
-                        {activeTab === 'logs' && (
-                            <div className={`p-6 rounded-xl shadow-sm border ${theme.card}`}>
-                                <h3 className="font-bold text-lg mb-4">Protokoll</h3>
-                                <div className="space-y-4">
-                                    {logs.map(log => (
-                                        <div key={log.id} className={`p-3 rounded-lg border flex justify-between items-start ${isDarkMode ? 'border-stone-700 bg-stone-900' : 'border-stone-100 bg-stone-50'}`}>
-                                            <div><div className="flex items-center gap-2"><span className={`text-xs font-bold uppercase px-1.5 py-0.5 rounded ${log.action === 'created' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{log.action === 'created' ? 'Erstellt' : 'Storniert'}</span><span className="font-medium">{log.details}</span></div><div className={`text-xs mt-1 ${theme.textMuted}`}>{log.time}</div></div>
-                                            <div className="text-right font-bold text-sm text-amber-600">{log.user}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
             );
@@ -593,10 +563,27 @@
                 e.preventDefault();
                 try {
                     if (editingId) {
-                        await updateDoc(doc(db, "reservations", editingId), { ...formData, pax: parseInt(formData.pax) });
+                        // Update existing
+                        await updateDoc(doc(db, "reservations", editingId), { 
+                            ...formData, 
+                            pax: parseInt(formData.pax),
+                            updatedBy: currentUser.name,
+                            updatedAt: new Date().toISOString()
+                        });
                     } else {
-                        const newRes = { ...formData, pax: parseInt(formData.pax), status: 'confirmed', date: currentDate.toDateString(), createdBy: currentUser.name };
+                        // Create new
+                        const newRes = { 
+                            ...formData, 
+                            pax: parseInt(formData.pax), 
+                            status: 'confirmed', 
+                            date: currentDate.toDateString(), 
+                            createdBy: currentUser.name,
+                            createdAt: new Date().toISOString(),
+                            updatedBy: null,
+                            updatedAt: null
+                        };
                         await addDoc(collection(db, "reservations"), newRes);
+                        
                         const dateObj = new Date(newRes.date);
                         const dateStr = dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
                         addLogEntry('created', `${newRes.name} (${dateStr} ${newRes.time}, ${newRes.pax}P)`);
@@ -646,6 +633,13 @@
             const openTableSelector = () => { const currentTables = formData.table ? formData.table.split('+').map(s => s.trim()) : []; setTempSelectedTables(currentTables); setShowTableSelector(true); };
             const toggleTableSelection = (tableLabel) => { setTempSelectedTables(prev => { if (prev.includes(tableLabel)) { return prev.filter(t => t !== tableLabel); } else { return [...prev, tableLabel]; } }); };
             const confirmTableSelection = () => { setFormData(prev => ({ ...prev, table: tempSelectedTables.join(' + ') })); setShowTableSelector(false); };
+
+            // Helper to format date/time for history
+            const formatDateTime = (isoString) => {
+                if (!isoString) return '';
+                const d = new Date(isoString);
+                return d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+            };
 
             return (
                 <div className={`min-h-screen font-sans transition-colors duration-300 ${theme.bg} ${theme.text}`}>
@@ -772,8 +766,25 @@
                                         <div className="col-span-2"><label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Schnellnotiz (Klicken zum Einfügen)</label><div className="flex gap-2">{availableTags.map(tag => { const isActive = (formData.notes || '').includes(tag.label); const TagIcon = tag.icon; return (<button key={tag.id} type="button" onClick={() => toggleTag(tag.label)} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${isActive ? `${tag.color} ring-2 ring-offset-1 ring-amber-500/50` : `bg-transparent border-dashed ${isDarkMode ? 'border-stone-600 text-stone-400 hover:bg-stone-800' : 'border-stone-300 text-stone-500 hover:bg-stone-50'}`}`}><TagIcon size={16} /> {tag.label}</button>); })}</div></div>
                                         <div className="col-span-2"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Notizen</label><textarea name="notes" value={formData.notes} onChange={handleInputChange} rows="3" className={`w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none resize-none ${theme.input}`} placeholder="Weitere Details hier eingeben..."></textarea></div>
                                     </div>
+                                    
+                                    {/* History Section */}
+                                    {editingId && (() => {
+                                        const res = reservations.find(r => r.id === editingId);
+                                        if (!res) return null;
+                                        const formatDateTime = (isoString) => {
+                                            if (!isoString) return '';
+                                            const d = new Date(isoString);
+                                            return d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+                                        };
+                                        return (
+                                            <div className="mt-4 pt-4 border-t border-stone-200 dark:border-stone-700 text-xs text-stone-500 space-y-1">
+                                                <div className="flex justify-between"><span>Erstellt von: <strong>{res.createdBy}</strong></span><span>{res.createdAt ? formatDateTime(res.createdAt) : 'Unbekannt'}</span></div>
+                                                {res.updatedBy && (<div className="flex justify-between text-amber-600"><span>Geändert von: <strong>{res.updatedBy}</strong></span><span>{formatDateTime(res.updatedAt)}</span></div>)}
+                                            </div>
+                                        );
+                                    })()}
+
                                     <div className="mt-8 flex gap-3 justify-end"><button type="button" onClick={closeModal} className={`px-5 py-2 rounded-lg transition-colors ${isDarkMode ? 'text-stone-400 hover:bg-stone-700' : 'text-stone-600 hover:bg-stone-100'}`}>Abbrechen</button><button type="submit" className="px-5 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-md transition-colors font-medium">{editingId ? 'Änderungen speichern' : 'Reservierung hinzufügen'}</button></div>
-                                    {editingId && <div className={`mt-4 text-xs text-center ${theme.textMuted}`}>Reservierung erstellt von: <span className="font-bold">{reservations.find(r => r.id === editingId)?.createdBy || 'Unbekannt'}</span></div>}
                                 </form>
                             </div>
                         </div>
