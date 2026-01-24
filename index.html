@@ -26,17 +26,21 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .time-select { text-align: center; text-align-last: center; -moz-text-align-last: center; background-color: transparent; }
+        
         .grid-bg {
             background-size: 20px 20px;
-            background-image: linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
+            background-image:
+                linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
         }
         .dark .grid-bg {
-            background-image: linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px);
+            background-image:
+                linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px);
         }
     </style>
 </head>
 <body>
-    <!-- Fehler-Anzeige -->
     <div id="error-container" style="display:none; padding:20px; background:#fee2e2; color:#b91c1c; font-family:sans-serif; border-bottom:1px solid #ef4444; position:fixed; top:0; left:0; right:0; z-index:9999;">
         <strong>Fehler:</strong> <span id="error-text"></span>
         <button onclick="window.location.reload()" style="margin-top:10px; display:block; padding:5px 10px; background:#b91c1c; color:white; border:none; border-radius:4px;">Neu laden</button>
@@ -110,6 +114,8 @@
         const Maximize = (p) => <IconBase {...p}><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></IconBase>;
         const Minus = (p) => <IconBase {...p}><path d="M5 12h14"/></IconBase>;
         const Copy = (p) => <IconBase {...p}><rect width="13" height="13" x="9" y="9" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconBase>;
+        const CloudOff = (p) => <IconBase {...p}><path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 7h1.8a5 5 0 0 0 1.8 9h2.1"/><line x1="2" x2="22" y1="2" y2="22"/></IconBase>;
+        const Cloud = (p) => <IconBase {...p}><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></IconBase>;
 
         // --- 1. MAP RENDERER ---
         const MapRenderer = ({ tables, onTableClick, selectedTableId, isEditor, onDragMove, onDragEnd }) => {
@@ -153,7 +159,6 @@
                 let y = ((clientY - rect.top) / rect.height) * 100;
                 x = Math.max(0, Math.min(100, x));
                 y = Math.max(0, Math.min(100, y));
-                
                 if (onDragMove) onDragMove(dragItem.current, x, y);
             };
 
@@ -450,7 +455,7 @@
         };
 
         // 4. AdminView
-        const AdminView = ({ employees, logs, setView, theme, isDarkMode, db, tableLayout }) => {
+        const AdminView = ({ employees, setView, theme, isDarkMode, db, tableLayout }) => {
             const [activeTab, setActiveTab] = useState('employees');
             const [empName, setEmpName] = useState('');
             const [empPin, setEmpPin] = useState('');
@@ -562,23 +567,22 @@
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 try {
+                    const now = new Date().toISOString();
                     if (editingId) {
-                        // Update existing
                         await updateDoc(doc(db, "reservations", editingId), { 
                             ...formData, 
                             pax: parseInt(formData.pax),
                             updatedBy: currentUser.name,
-                            updatedAt: new Date().toISOString()
+                            updatedAt: now
                         });
                     } else {
-                        // Create new
                         const newRes = { 
                             ...formData, 
                             pax: parseInt(formData.pax), 
                             status: 'confirmed', 
                             date: currentDate.toDateString(), 
                             createdBy: currentUser.name,
-                            createdAt: new Date().toISOString(),
+                            createdAt: now,
                             updatedBy: null,
                             updatedAt: null
                         };
@@ -596,10 +600,15 @@
             const openAddModal = () => { setEditingId(null); setFormData({ name: '', time: '18:00', pax: 2, table: '', phone: '', notes: '' }); setIsModalOpen(true); };
             const openEditModal = (res) => { if (currentUser.role === 'chef') return; setEditingId(res.id); setFormData({ name: res.name, time: res.time, pax: res.pax, table: res.table, phone: res.phone, notes: res.notes || '' }); setIsModalOpen(true); };
             const closeModal = () => setIsModalOpen(false);
-            const updateStatus = async (id, newStatus, resName = '', resDate = '', resTime = '', resPax = 0) => {
+            const updateStatus = async (id, newStatus, resName = '') => {
                 try {
                     const targetRes = reservations.find(r => r.id === id);
-                    await updateDoc(doc(db, "reservations", id), { status: newStatus });
+                    const now = new Date().toISOString();
+                    await updateDoc(doc(db, "reservations", id), { 
+                        status: newStatus,
+                        updatedBy: currentUser.name,
+                        updatedAt: now
+                    });
                     if (newStatus === 'cancelled' && targetRes) {
                         const dateObj = new Date(targetRes.date);
                         const dateStr = dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
@@ -634,7 +643,6 @@
             const toggleTableSelection = (tableLabel) => { setTempSelectedTables(prev => { if (prev.includes(tableLabel)) { return prev.filter(t => t !== tableLabel); } else { return [...prev, tableLabel]; } }); };
             const confirmTableSelection = () => { setFormData(prev => ({ ...prev, table: tempSelectedTables.join(' + ') })); setShowTableSelector(false); };
 
-            // Helper to format date/time for history
             const formatDateTime = (isoString) => {
                 if (!isoString) return '';
                 const d = new Date(isoString);
@@ -646,12 +654,10 @@
                     <style>{`.font-mabelle { font-family: 'Avenir Next', 'Avenir', 'Helvetica Neue', sans-serif; font-weight: 200; } html { overflow-y: scroll; } input[type="date"]::-webkit-calendar-picker-indicator { position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0; padding: 0; cursor: pointer; opacity: 0; } input[type="time"] { min-width: 0; width: 100%; } .time-select { text-align: center; text-align-last: center; -moz-text-align-last: center; background-color: transparent; } .grid-bg { background-size: 20px 20px; background-image: linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px); } .dark .grid-bg { background-image: linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px); }`}</style>
                     <header className={`shadow-sm sticky top-0 z-10 transition-colors duration-300 ${theme.header}`}>
                         <div className="max-w-5xl mx-auto px-4 py-4 relative">
-                            {/* Mobile Actions: Admin & Dark Mode (LEFT) */}
                             <div className="absolute top-4 left-4 flex gap-1 md:hidden z-20">
                                 {currentUser.role === 'admin' && <button onClick={() => setView('admin')} className="p-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"><Shield size={20} /></button>}
                                 <button onClick={toggleDarkMode} className={`p-2 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-amber-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'}`}>{isDarkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
                             </div>
-                            {/* Mobile Action: Logout (RIGHT) */}
                             <button onClick={handleLogout} className={`absolute top-4 right-4 p-2 rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-50 md:hidden z-20`}><LogOut size={20} /></button>
 
                             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
@@ -771,15 +777,25 @@
                                     {editingId && (() => {
                                         const res = reservations.find(r => r.id === editingId);
                                         if (!res) return null;
+                                        
                                         const formatDateTime = (isoString) => {
                                             if (!isoString) return '';
                                             const d = new Date(isoString);
                                             return d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
                                         };
+
                                         return (
                                             <div className="mt-4 pt-4 border-t border-stone-200 dark:border-stone-700 text-xs text-stone-500 space-y-1">
-                                                <div className="flex justify-between"><span>Erstellt von: <strong>{res.createdBy}</strong></span><span>{res.createdAt ? formatDateTime(res.createdAt) : 'Unbekannt'}</span></div>
-                                                {res.updatedBy && (<div className="flex justify-between text-amber-600"><span>Geändert von: <strong>{res.updatedBy}</strong></span><span>{formatDateTime(res.updatedAt)}</span></div>)}
+                                                <div className="flex justify-between">
+                                                    <span>Erstellt von: <strong>{res.createdBy}</strong></span>
+                                                    <span>{res.createdAt ? formatDateTime(res.createdAt) : 'Unbekannt'}</span>
+                                                </div>
+                                                {res.updatedBy && (
+                                                    <div className="flex justify-between text-amber-600">
+                                                        <span>Geändert von: <strong>{res.updatedBy}</strong></span>
+                                                        <span>{formatDateTime(res.updatedAt)}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })()}
@@ -860,7 +876,6 @@
             const [currentUser, setCurrentUser] = useState(null);
             
             const [employees, setEmployees] = useState([]);
-            const [logs, setLogs] = useState([]);
             const [reservations, setReservations] = useState([]);
             const [tableLayout, setTableLayout] = useState([]); 
             const [isLoading, setIsLoading] = useState(true);
@@ -890,11 +905,7 @@
                         setReservations(data);
                     });
 
-                    const unsubLog = onSnapshot(query(collection(db, "logs"), orderBy("timestamp", "desc"), limit(50)), (snapshot) => {
-                        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        setLogs(data);
-                    });
-
+                    // Tische laden
                     const localTables = localStorage.getItem('mabelle_tables_autosave');
                     if (localTables) setTableLayout(JSON.parse(localTables));
                     
@@ -926,14 +937,6 @@
                     }
                 }
             }, [pinInput, employees]);
-
-            const addLogEntry = async (action, details) => {
-                try {
-                    await addDoc(collection(db, "logs"), {
-                        action, details, user: currentUser ? currentUser.name : 'Unknown', time: new Date().toLocaleString(), timestamp: Date.now()
-                    });
-                } catch(e) { console.error("Log Error", e); }
-            };
 
             const handleLogout = () => { setCurrentUser(null); setView('landing'); };
             const handleNumpadClick = (num) => { if (pinInput.length < 4) setPinInput(prev => prev + num); };
