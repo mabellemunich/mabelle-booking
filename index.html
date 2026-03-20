@@ -164,6 +164,8 @@
         const SettingsIcon = (p) => <IconBase {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconBase>;
         const ChevronDown = (p) => <IconBase {...p}><polyline points="6 9 12 15 18 9"/></IconBase>;
         const GridIcon = (p) => <IconBase {...p}><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></IconBase>;
+        const Instagram = (p) => <IconBase {...p}><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></IconBase>;
+        const UserX = (p) => <IconBase {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" x2="23" y1="8" y2="14"/><line x1="23" x2="17" y1="8" y2="14"/></IconBase>;
 
         // --- MAP RENDERER ---
         const MapRenderer = ({ tables, onTableClick, selectedTableId, isEditor, onDragMove, onDragEnd }) => {
@@ -456,7 +458,9 @@
             const [searchTerm, setSearchTerm] = useState('');
             const [activeFilter, setActiveFilter] = useState('active'); // 'active' | 'completed'
             const dateInputRef = useRef(null);
-            const [formData, setFormData] = useState({ name: '', time: '18:00', pax: 2, table: '', phone: '', notes: '', date: '' });
+            
+            // FORM DATA mit neuem "instagram" Feld
+            const [formData, setFormData] = useState({ name: '', time: '18:00', pax: 2, table: '', phone: '', instagram: '', notes: '', date: '' });
             const [tempSelectedTables, setTempSelectedTables] = useState([]);
 
             // TIMER FÜR LIVE-STATUS UPDATE
@@ -505,25 +509,55 @@
                 if (part === 'm') setFormData(prev => ({ ...prev, time: `${h}:${value}` }));
             };
 
+            // MINI CRM: NO-SHOW PRÜFUNG (LIVE BEIM EINTIPPEN)
+            const noShowWarning = useMemo(() => {
+                const checkPhone = (formData.phone || '').trim();
+                const checkIg = (formData.instagram || '').trim();
+                
+                if (!checkPhone && !checkIg) return false;
+                
+                // Wir suchen in allen Reservierungen, ob diese Nummer/IG jemals "no-show" war.
+                return reservations.some(r => 
+                    r.status === 'no-show' && 
+                    (
+                        (checkPhone && r.phone && r.phone.trim() === checkPhone) || 
+                        (checkIg && r.instagram && r.instagram.trim() === checkIg)
+                    )
+                );
+            }, [formData.phone, formData.instagram, reservations]);
+
             const handleSubmit = async (e) => {
                 e.preventDefault();
+                
+                // Pflicht-Check: Entweder Telefon ODER Instagram muss ausgefüllt sein.
+                const phoneVal = (formData.phone || '').trim();
+                const igVal = (formData.instagram || '').trim();
+                
+                if (!phoneVal && !igVal) {
+                    alert('Bitte geben Sie für das No-Show Tracking eine Telefonnummer ODER einen Instagram-Namen an!');
+                    return;
+                }
+
                 try {
                     const now = new Date().toISOString();
                     const [y, m, d] = formData.date.split('-').map(Number);
                     const newDateObj = new Date(y, m - 1, d);
                     const newDateString = newDateObj.toDateString();
 
+                    const cleanData = { ...formData, phone: phoneVal, instagram: igVal };
+
                     if (editingId) {
-                        await db.collection("reservations").doc(editingId).update({ ...formData, date: newDateString, pax: parseInt(formData.pax, 10), updatedBy: currentUser.name, updatedAt: now });
+                        await db.collection("reservations").doc(editingId).update({ ...cleanData, date: newDateString, pax: parseInt(formData.pax, 10), updatedBy: currentUser.name, updatedAt: now });
                     } else {
-                        const newRes = { ...formData, date: newDateString, pax: parseInt(formData.pax, 10), status: 'confirmed', createdBy: currentUser.name, createdAt: now, updatedBy: null, updatedAt: null };
+                        const newRes = { ...cleanData, date: newDateString, pax: parseInt(formData.pax, 10), status: 'confirmed', createdBy: currentUser.name, createdAt: now, updatedBy: null, updatedAt: null };
                         await db.collection("reservations").add(newRes);
                     }
                     closeModal();
                 } catch (e) { console.error("Error saving reservation: ", e); }
             };
-            const openAddModal = () => { setEditingId(null); setFormData({ name: '', time: '18:00', pax: 2, table: '', phone: '', notes: '', date: getIsoDate(currentDate) }); setIsModalOpen(true); };
-            const openEditModal = (res) => { if (currentUser.role === 'chef') return; setEditingId(res.id); const d = new Date(res.date); setFormData({ name: res.name, time: res.time, pax: res.pax, table: res.table, phone: res.phone, notes: res.notes || '', date: getIsoDate(d) }); setIsModalOpen(true); };
+
+            const openAddModal = () => { setEditingId(null); setFormData({ name: '', time: '18:00', pax: 2, table: '', phone: '', instagram: '', notes: '', date: getIsoDate(currentDate) }); setIsModalOpen(true); };
+            const openEditModal = (res) => { if (currentUser.role === 'chef') return; setEditingId(res.id); const d = new Date(res.date); setFormData({ name: res.name, time: res.time, pax: res.pax, table: res.table, phone: res.phone || '', instagram: res.instagram || '', notes: res.notes || '', date: getIsoDate(d) }); setIsModalOpen(true); };
             const closeModal = () => setIsModalOpen(false);
             const updateStatus = async (id, newStatus) => {
                 try {
@@ -535,9 +569,9 @@
             const filteredReservations = useMemo(() => {
                 if (isPastCutoff) return [];
                 let filtered = reservations.filter(res => res.date === currentDate.toDateString());
-                if (searchTerm) { const lowerTerm = searchTerm.toLowerCase(); filtered = filtered.filter(res => res.name.toLowerCase().includes(lowerTerm) || res.phone.includes(searchTerm) || (res.table && res.table.toLowerCase().includes(lowerTerm)) || (res.notes && res.notes.toLowerCase().includes(lowerTerm))); }
+                if (searchTerm) { const lowerTerm = searchTerm.toLowerCase(); filtered = filtered.filter(res => res.name.toLowerCase().includes(lowerTerm) || (res.phone && res.phone.includes(searchTerm)) || (res.instagram && res.instagram.toLowerCase().includes(lowerTerm)) || (res.table && res.table.toLowerCase().includes(lowerTerm)) || (res.notes && res.notes.toLowerCase().includes(lowerTerm))); }
                 if (activeFilter === 'active') { filtered = filtered.filter(res => res.status === 'confirmed'); }
-                else if (activeFilter === 'completed') { filtered = filtered.filter(res => ['arrived', 'cancelled'].includes(res.status)); }
+                else if (activeFilter === 'completed') { filtered = filtered.filter(res => ['arrived', 'cancelled', 'no-show'].includes(res.status)); }
                 return filtered.sort((a, b) => a.time.localeCompare(b.time));
             }, [reservations, currentDate, searchTerm, activeFilter, isPastCutoff]);
             
@@ -567,7 +601,7 @@
                 
                 const activeRes = reservations.filter(res => {
                     if (res.date !== currentDate.toDateString()) return false;
-                    if (activeFilter === 'completed') return ['arrived', 'cancelled'].includes(res.status);
+                    if (activeFilter === 'completed') return ['arrived', 'cancelled', 'no-show'].includes(res.status);
                     return res.status === 'confirmed';
                 });
 
@@ -657,7 +691,7 @@
                                     </div>
                                     {currentUser.role !== 'chef' && <button onClick={openAddModal} className="md:hidden bg-amber-600 hover:bg-amber-700 text-white px-6 py-1 rounded-lg shadow-md flex items-center justify-center gap-2 font-medium transition-all active:scale-95 whitespace-nowrap"><Plus size={20} /> <span>Neu</span></button>}
                                 </div>
-                                <div className="relative w-full md:w-72"><Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${theme.textMuted}`} size={18} /><input type="text" placeholder="Name, Tisch, Notiz..." className={`w-full pl-10 pr-4 py-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm text-sm transition-colors ${theme.input}`} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                                <div className="relative w-full md:w-72"><Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${theme.textMuted}`} size={18} /><input type="text" placeholder="Name, Tisch, Insta, Telefon..." className={`w-full pl-10 pr-4 py-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm text-sm transition-colors ${theme.input}`} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
                             </div>
                         </div>
                     </header>
@@ -669,13 +703,13 @@
                         </div>
                         
                         <div className={`md:rounded-xl md:shadow-sm md:border md:overflow-hidden transition-colors ${isDarkMode ? 'md:border-stone-700 md:bg-stone-800' : 'md:border-stone-200 md:bg-white'}`}>
-                            <div className={`hidden md:grid grid-cols-12 gap-2 p-4 border-b text-xs font-bold uppercase tracking-wider items-center ${theme.tableHeader}`}><div className="col-span-1">Zeit</div><div className="col-span-3">Name</div><div className="col-span-1 text-center">Pers.</div><div className="col-span-1 text-center">Tisch</div><div className="col-span-2">Telefon</div><div className="col-span-2">Notizen</div><div className="col-span-2 text-right">Status</div></div>
+                            <div className={`hidden md:grid grid-cols-12 gap-2 p-4 border-b text-xs font-bold uppercase tracking-wider items-center ${theme.tableHeader}`}><div className="col-span-1">Zeit</div><div className="col-span-3">Name</div><div className="col-span-1 text-center">Pers.</div><div className="col-span-1 text-center">Tisch</div><div className="col-span-2">Telefon / Insta</div><div className="col-span-2">Notizen</div><div className="col-span-2 text-right">Status</div></div>
                             <div className={`md:divide-y ${isDarkMode ? 'md:divide-stone-700' : 'md:divide-stone-100'}`}>
                                 {filteredReservations.length === 0 ? (
                                     <div className={`p-12 text-center ${theme.textMuted}`}><div className="flex justify-center mb-4"><Archive size={48} className="opacity-20" /></div><p>{isPastCutoff ? "Daten aus der Vergangenheit (älter als 3 Tage) werden nicht mehr angezeigt." : (activeFilter === 'completed' ? "Keine erledigten Reservierungen." : "Keine offenen Reservierungen für diesen Tag.")}</p></div>
                                 ) : (
                                     filteredReservations.map((res, index) => {
-                                        // VERSPÄTUNGS-CHECK (No-Show Warnung)
+                                        // VERSPÄTUNGS-CHECK (Zeit-Warnung)
                                         const delayStatus = (() => {
                                             if (res.status !== 'confirmed') return null;
                                             const resDate = new Date(res.date);
@@ -690,41 +724,49 @@
                                         })();
 
                                         return (
-                                            <div key={res.id} onClick={() => openEditModal(res)} style={{ animationDelay: `${index * 40}ms` }} className={`animate-slide-fade cursor-pointer flex flex-col gap-1 p-3 rounded-xl border mb-2 shadow-sm relative ${isDarkMode ? 'bg-stone-800 border-stone-700' : 'bg-white border-stone-200'} md:grid md:grid-cols-12 md:gap-2 md:p-4 md:items-start md:border-0 md:rounded-none md:shadow-none md:mb-0 transition-colors group ${theme.rowHover} ${res.status === 'confirmed' ? 'md:bg-transparent' : ''} ${res.status === 'cancelled' ? (isDarkMode ? 'opacity-80 bg-red-950/40 border-l-4 border-l-red-800/70 md:bg-red-950/40' : 'opacity-90 bg-red-50 border-l-4 border-l-red-400 md:bg-red-50') : ''} ${res.status === 'arrived' ? (isDarkMode ? 'bg-emerald-900/40 border-l-4 border-l-emerald-600 md:bg-emerald-900/40' : 'bg-emerald-100/80 border-l-4 border-l-emerald-500 md:bg-emerald-100/80') : ''}`}>
+                                            <div key={res.id} onClick={() => openEditModal(res)} style={{ animationDelay: `${index * 40}ms` }} className={`animate-slide-fade cursor-pointer flex flex-col gap-1 p-3 rounded-xl border mb-2 shadow-sm relative ${isDarkMode ? 'bg-stone-800 border-stone-700' : 'bg-white border-stone-200'} md:grid md:grid-cols-12 md:gap-2 md:p-4 md:items-start md:border-0 md:rounded-none md:shadow-none md:mb-0 transition-colors group ${theme.rowHover} ${res.status === 'confirmed' ? 'md:bg-transparent' : ''} ${res.status === 'cancelled' ? (isDarkMode ? 'opacity-80 bg-stone-950/40 border-l-4 border-l-stone-600 md:bg-stone-950/40' : 'opacity-90 bg-stone-100 border-l-4 border-l-stone-400 md:bg-stone-100') : ''} ${res.status === 'no-show' ? (isDarkMode ? 'opacity-90 bg-red-950/60 border-l-4 border-l-red-600 md:bg-red-950/60' : 'opacity-95 bg-red-100 border-l-4 border-l-red-600 md:bg-red-100') : ''} ${res.status === 'arrived' ? (isDarkMode ? 'bg-emerald-900/40 border-l-4 border-l-emerald-600 md:bg-emerald-900/40' : 'bg-emerald-100/80 border-l-4 border-l-emerald-500 md:bg-emerald-100/80') : ''}`}>
                                                 <div className="flex justify-between items-center md:hidden overflow-hidden mb-0.5">
                                                     <div className="flex items-center gap-3 overflow-hidden">
-                                                        <div className={`font-bold text-lg whitespace-nowrap flex items-center gap-1 ${isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}><Clock size={16} className={res.status === 'cancelled' ? 'text-red-500' : 'text-amber-600'} /> {res.time}</div>
-                                                        <div className={`font-medium text-lg truncate hover:text-amber-600 transition-colors ${res.status === 'cancelled' ? 'line-through text-stone-500' : (isDarkMode ? 'text-stone-100' : 'text-stone-900')}`}>{res.name}</div>
+                                                        <div className={`font-bold text-lg whitespace-nowrap flex items-center gap-1 ${isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}><Clock size={16} className={(res.status === 'cancelled' || res.status === 'no-show') ? 'text-red-500' : 'text-amber-600'} /> {res.time}</div>
+                                                        <div className={`font-medium text-lg truncate hover:text-amber-600 transition-colors ${(res.status === 'cancelled' || res.status === 'no-show') ? 'line-through text-stone-500' : (isDarkMode ? 'text-stone-100' : 'text-stone-900')}`}>{res.name}</div>
                                                     </div>
                                                     <div className="flex items-center gap-2 shrink-0">
                                                         {res.status === 'confirmed' && delayStatus === 'red' && <div className="w-3 h-3 rounded-full bg-red-500 animate-blink shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>}
                                                         {res.status === 'confirmed' && delayStatus === 'yellow' && <div className="w-3 h-3 rounded-full bg-amber-400 animate-blink shadow-[0_0_8px_rgba(251,191,36,0.8)]"></div>}
                                                         {res.status === 'arrived' && <div className="bg-emerald-200 dark:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1"><CheckCircle size={14}/> Da</div>}
-                                                        {res.status === 'cancelled' && <div className="bg-red-200 dark:bg-red-900/80 text-red-800 dark:text-red-300 px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1"><X size={14}/> Storno</div>}
+                                                        {res.status === 'cancelled' && <div className="bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-400 px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1"><X size={14}/> Storno</div>}
+                                                        {res.status === 'no-show' && <div className="bg-red-600 text-white px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1"><UserX size={14}/> NO-SHOW</div>}
                                                     </div>
                                                 </div>
                                                 <div className={`hidden md:flex col-span-1 font-bold items-center gap-1 py-1 ${isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}><Clock size={14} className={theme.textMuted} />{res.time}</div>
-                                                <div className={`hidden md:flex col-span-3 font-medium py-1 items-center gap-2 ${res.status === 'cancelled' ? 'line-through text-stone-500' : (isDarkMode ? 'text-stone-100' : 'text-stone-900')}`}>
+                                                <div className={`hidden md:flex col-span-3 font-medium py-1 items-center gap-2 ${(res.status === 'cancelled' || res.status === 'no-show') ? 'line-through text-stone-500' : (isDarkMode ? 'text-stone-100' : 'text-stone-900')}`}>
                                                     <div className="hover:text-amber-600 transition-colors truncate">{res.name}</div>
                                                     {res.status === 'confirmed' && delayStatus === 'red' && <div className="w-2 h-2 rounded-full bg-red-500 animate-blink shadow-[0_0_6px_rgba(239,68,68,0.8)]" title="> 15 Min verspätet"></div>}
                                                     {res.status === 'confirmed' && delayStatus === 'yellow' && <div className="w-2 h-2 rounded-full bg-amber-400 animate-blink shadow-[0_0_6px_rgba(251,191,36,0.8)]" title="> 10 Min verspätet"></div>}
                                                     {res.status === 'arrived' && <span className="bg-emerald-200 dark:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-bold">DA</span>}
-                                                    {res.status === 'cancelled' && <span className="bg-red-200 dark:bg-red-900/80 text-red-800 dark:text-red-300 px-1.5 py-0.5 rounded text-[10px] font-bold">STORNO</span>}
+                                                    {res.status === 'cancelled' && <span className="bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-400 px-1.5 py-0.5 rounded text-[10px] font-bold">STORNO</span>}
+                                                    {res.status === 'no-show' && <span className="bg-red-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider">NO-SHOW</span>}
                                                 </div>
                                                 <div className="flex flex-wrap gap-2 md:hidden items-center leading-tight">
                                                     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-base font-bold ${isDarkMode ? 'bg-stone-700 text-stone-300' : 'bg-stone-100 text-stone-600'}`}><Users size={16}/> {res.pax}</span>
                                                     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-base font-mono ${isDarkMode ? 'bg-stone-700 text-stone-300' : 'bg-stone-100 text-stone-600'}`}>{res.table || 'Kein Tisch'}</span>
                                                     {res.phone && <span className={`inline-flex items-center gap-1.5 text-base ${theme.textMuted} ml-1`}><Phone size={16}/> {res.phone}</span>}
+                                                    {res.instagram && <span className={`inline-flex items-center gap-1.5 text-base ${theme.textMuted} ml-1`}><Instagram size={16}/> {res.instagram}</span>}
                                                 </div>
                                                 <div className="hidden md:block col-span-1 text-center py-1"><span className={`inline-flex items-center justify-center px-2 py-1 rounded-md text-sm font-bold w-10 ${isDarkMode ? 'bg-stone-700 text-stone-300' : 'bg-stone-100 text-stone-600'}`}>{res.pax}</span></div>
                                                 <div className={`hidden md:block col-span-1 text-center font-mono text-sm py-1 ${isDarkMode ? 'text-stone-400' : 'text-stone-600'}`}>{res.table || '-'}</div>
-                                                <div className={`hidden md:flex col-span-2 text-sm truncate items-center gap-1 py-1 ${theme.textMuted}`}>{res.phone && <Phone size={12} />}{res.phone || '-'}</div>
+                                                <div className={`hidden md:flex col-span-2 text-sm truncate items-center flex-wrap gap-1.5 py-1 ${theme.textMuted}`}>
+                                                    {res.phone && <span className="flex items-center gap-1" title="Telefon"><Phone size={12} />{res.phone}</span>}
+                                                    {res.instagram && <span className="flex items-center gap-1" title="Instagram"><Instagram size={12} />{res.instagram}</span>}
+                                                    {!res.phone && !res.instagram && '-'}
+                                                </div>
                                                 <div className="md:col-span-2 flex flex-col justify-center">{renderNoteContent(res.notes)}{res.createdBy && editingId === res.id && <div className="text-[10px] text-amber-600 mt-1">Erstellt von: {res.createdBy}</div>}</div>
                                                 {currentUser.role !== 'chef' && <div className="flex md:col-span-2 md:justify-end gap-2 py-0.5 mt-1 border-t pt-1 md:border-0 md:pt-0 border-dashed border-stone-200 dark:border-stone-700" onClick={(e) => e.stopPropagation()}>
                                                     {res.status === 'confirmed' && <button onClick={() => updateStatus(res.id, 'arrived')} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all duration-200 active:scale-90 tooltip flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-emerald-900/30 hover:text-emerald-400 hover:border-emerald-800' : 'bg-white border-stone-200 text-stone-400 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200'}`} title="Gast ist da"><Users size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">Anwesend</span></button>}
                                                     <button onClick={() => openEditModal(res)} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all duration-200 active:scale-90 flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-stone-700 hover:text-stone-300 hover:border-stone-500' : 'bg-white border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-600 hover:border-stone-300'}`} title="Bearbeiten"><Edit2 size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">Bearbeiten</span></button>
-                                                    {res.status === 'confirmed' && <button onClick={() => updateStatus(res.id, 'cancelled')} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all duration-200 active:scale-90 flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-red-900/30 hover:text-red-400 hover:border-red-800' : 'bg-white border-stone-200 text-stone-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200'}`} title="Stornieren"><X size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">Storno</span></button>}
-                                                    {(res.status === 'cancelled' || res.status === 'arrived') && (<button onClick={(e) => { e.stopPropagation(); updateStatus(res.id, 'confirmed'); }} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all duration-200 active:scale-90 flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-blue-900/30 hover:text-blue-400 hover:border-blue-800' : 'bg-white border-stone-200 text-stone-400 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200'}`} title="Wiederherstellen"><RotateCcw size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">Wiederherstellen</span></button>)}
+                                                    {res.status === 'confirmed' && <button onClick={() => updateStatus(res.id, 'cancelled')} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all duration-200 active:scale-90 flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-stone-700/50 hover:text-stone-400' : 'bg-white border-stone-200 text-stone-400 hover:bg-stone-100 hover:text-stone-600'}`} title="Normales Storno (Hat abgesagt)"><X size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">Storno</span></button>}
+                                                    {res.status === 'confirmed' && <button onClick={() => updateStatus(res.id, 'no-show')} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all duration-200 active:scale-90 flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-red-900/50 hover:text-red-400 hover:border-red-700' : 'bg-white border-stone-200 text-stone-400 hover:bg-red-50 hover:text-red-600 hover:border-red-300'}`} title="Gast nicht erschienen (Blacklist-Eintrag)"><UserX size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">No-Show</span></button>}
+                                                    {(res.status === 'cancelled' || res.status === 'arrived' || res.status === 'no-show') && (<button onClick={(e) => { e.stopPropagation(); updateStatus(res.id, 'confirmed'); }} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all duration-200 active:scale-90 flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-blue-900/30 hover:text-blue-400 hover:border-blue-800' : 'bg-white border-stone-200 text-stone-400 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200'}`} title="Wiederherstellen"><RotateCcw size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">Wiederherstellen</span></button>)}
                                                 </div>}
                                             </div>
                                         );
@@ -737,18 +779,46 @@
                     {showCalendar && (<CustomCalendar currentDate={currentDate} onDateSelect={(d) => { setCurrentDate(d); }} onClose={() => setShowCalendar(false)} reservations={reservations} theme={theme} isDarkMode={isDarkMode} />)}
 
                     {isModalOpen && (
-                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                            <div className={`rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-spring ${theme.card}`}>
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto pt-20 pb-20">
+                            <div className={`rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-spring ${theme.card} my-auto`}>
                                 <div className="bg-amber-600 px-6 py-4 flex justify-between items-center"><h2 className="text-white font-bold text-lg flex items-center gap-2">{editingId ? <Edit2 size={20}/> : <Plus size={20}/>} {editingId ? 'Reservierung bearbeiten' : 'Neue Reservierung'}</h2><button onClick={closeModal} className="text-amber-100 hover:text-white transition-transform active:scale-90"><X size={24}/></button></div>
                                 <form onSubmit={handleSubmit} className="p-6">
-                                    <div className="grid grid-cols-2 gap-2 md:gap-4">
+                                    <div className="grid grid-cols-2 gap-3 md:gap-4">
+                                        
+                                        {/* NO-SHOW FRÜHWARNUNG */}
+                                        {noShowWarning && (
+                                            <div className="col-span-2 bg-red-100 border-l-4 border-red-500 text-red-800 p-3 rounded-lg flex items-start gap-2 mb-2 animate-spring shadow-sm">
+                                                <AlertCircle size={20} className="shrink-0 mt-0.5 text-red-600" />
+                                                <div>
+                                                    <strong className="block text-sm uppercase tracking-wide">Blacklist Warnung!</strong>
+                                                    <span className="text-xs">Dieser Gast (Telefon oder Instagram) ist in der Vergangenheit bereits unentschuldigt nicht erschienen (No-Show).</span>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <div className="col-span-2"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Name des Gastes</label><input required name="name" value={formData.name} onChange={handleInputChange} type="text" className={`w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} placeholder="z.B. Max Mustermann" autoFocus /></div>
                                         <div className="col-span-2 flex gap-2">
                                             <div className="w-1/2 min-w-0"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Uhrzeit</label><div className={`flex items-center w-full rounded-lg border px-1 py-2 focus-within:ring-2 focus-within:ring-amber-500 ${theme.input}`}><select value={formData.time.split(':')[0]} onChange={(e) => handleTimeChange('h', e.target.value)} className="w-1/2 text-center bg-transparent border-0 outline-none appearance-none time-select cursor-pointer">{hoursList.map(h => <option key={h} value={h} className={isDarkMode ? 'bg-stone-800' : 'bg-white'}>{h}</option>)}</select><span className="font-bold opacity-50 px-1">:</span><select value={formData.time.split(':')[1]} onChange={(e) => handleTimeChange('m', e.target.value)} className="w-1/2 text-center bg-transparent border-0 outline-none appearance-none time-select cursor-pointer">{minutesList.map(m => <option key={m} value={m} className={isDarkMode ? 'bg-stone-800' : 'bg-white'}>{m}</option>)}</select></div></div>
                                             <div className="w-1/2 min-w-0"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Personen</label><div className="flex items-center w-full"><button type="button" onClick={() => setFormData(p => ({...p, pax: Math.max(1, parseInt(p.pax)-1)}))} className={`w-14 h-10 text-xl rounded-l-lg font-bold border-y border-l transition-colors active:bg-stone-300 dark:active:bg-stone-500 ${isDarkMode ? 'bg-stone-700 border-stone-600 text-stone-300 hover:bg-stone-600' : 'bg-stone-100 border-stone-200 text-stone-600 hover:bg-stone-200'}`}>-</button><input type="number" name="pax" value={formData.pax} onChange={handleInputChange} className={`w-full min-w-0 text-center border-y h-10 font-bold text-lg outline-none ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-100' : 'bg-white border-stone-200'}`} /><button type="button" onClick={() => setFormData(p => ({...p, pax: parseInt(p.pax)+1}))} className={`w-14 h-10 text-xl rounded-r-lg font-bold border-y border-r transition-colors active:bg-stone-300 dark:active:bg-stone-500 ${isDarkMode ? 'bg-stone-700 border-stone-600 text-stone-300 hover:bg-stone-600' : 'bg-stone-100 border-stone-200 text-stone-600 hover:bg-stone-200'}`}>+</button></div></div></div>
+                                        
+                                        <div className="col-span-2">
+                                            <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Tisch</label>
+                                            <div className="flex relative">
+                                                <input type="text" name="table" value={formData.table} onChange={handleInputChange} placeholder="z.B. T12" className={`w-full min-w-0 rounded-lg border px-3 py-2 pr-10 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} />
+                                                <button type="button" onClick={() => openTableSelector()} className={`absolute right-1 top-1 p-1.5 rounded hover:bg-stone-200 dark:hover:bg-stone-700 text-amber-600 transition-colors`}><Square size={18}/></button>
+                                            </div>
+                                        </div>
+
                                         <div className="col-span-2 flex gap-2">
-                                            <div className="w-1/2 min-w-0 relative"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Tisch</label><div className="flex relative"><input type="text" name="table" value={formData.table} onChange={handleInputChange} placeholder="z.B. T12" className={`w-full min-w-0 rounded-lg border px-3 py-2 pr-10 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} /><button type="button" onClick={() => openTableSelector()} className={`absolute right-1 top-1 p-1.5 rounded hover:bg-stone-200 dark:hover:bg-stone-700 text-amber-600 transition-colors`}><Square size={18}/></button></div></div>
-                                            <div className="w-1/2 min-w-0"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Telefon</label><input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="017..." className={`w-full min-w-0 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} /></div></div>
+                                            <div className="w-1/2 min-w-0">
+                                                <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Telefon</label>
+                                                <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="017..." className={`w-full min-w-0 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} />
+                                            </div>
+                                            <div className="w-1/2 min-w-0">
+                                                <label className={`block text-sm font-medium mb-1 flex items-center gap-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Insta (@)</label>
+                                                <input type="text" name="instagram" value={formData.instagram} onChange={handleInputChange} placeholder="mabelle..." className={`w-full min-w-0 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} />
+                                            </div>
+                                        </div>
                                         
                                         <div className="col-span-2">
                                             <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Datum (Verschieben)</label>
