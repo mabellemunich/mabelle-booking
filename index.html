@@ -515,11 +515,11 @@
                         // Finde den aktuellsten, vergangenen Eintrag für diese Nummer / dieses Insta
                         const pastMatch = [...reservations].reverse().find(r => {
                             if (name === 'phone' && r.phone) {
-                                // Entfernt Leerzeichen für einen robusteren Abgleich (z.B. "0176 123" == "0176123")
-                                return r.phone.replace(/\s/g, '') === value.replace(/\s/g, '');
+                                // Entfernt Leerzeichen/Sonderzeichen für einen robusteren Abgleich
+                                return r.phone.replace(/[\s\-\+\/]/g, '') === value.replace(/[\s\-\+\/]/g, '');
                             }
                             if (name === 'instagram' && r.instagram) {
-                                return r.instagram.trim().toLowerCase() === searchVal;
+                                return r.instagram.trim().toLowerCase() === searchVal.replace(/^@/, '');
                             }
                             return false;
                         });
@@ -569,6 +569,38 @@
                     alert('Bitte geben Sie eine Telefonnummer oder einen Instagram-Namen an!');
                     return;
                 }
+
+                // --- NEU: DUMMY-SCHUTZ (Anti-Fake Filter) ---
+                if (phoneVal) {
+                    // Entfernt Leerzeichen, Plus und Striche für die Prüfung
+                    const cleanPhone = phoneVal.replace(/[\s\-\+\/]/g, ''); 
+                    
+                    if (cleanPhone.length > 0 && cleanPhone.length < 7) {
+                        alert('Die Telefonnummer ist zu kurz. Bitte eine echte Nummer eintragen!');
+                        return;
+                    }
+                    // Prüft auf identische Zahlen (z.B. 0000000) oder simple Reihenfolgen (1234567)
+                    if (/^(\d)\1+$/.test(cleanPhone) || cleanPhone.includes('1234567')) {
+                        alert('Diese Telefonnummer sieht nach einem Platzhalter aus. Bitte eine echte Nummer eintragen!');
+                        return;
+                    }
+                }
+
+                if (igVal) {
+                    // Entfernt das @ für die Prüfung
+                    const cleanIg = igVal.replace(/^@/, '').toLowerCase();
+                    const dummyWords = ['test', 'keins', 'nein', 'none', 'dummy', 'unbekannt', 'egal'];
+                    
+                    if (cleanIg.length > 0 && cleanIg.length < 3) {
+                        alert('Der Instagram-Name ist zu kurz. Bitte einen echten Namen eintragen!');
+                        return;
+                    }
+                    if (dummyWords.includes(cleanIg)) {
+                        alert('Dieser Instagram-Name sieht ungültig aus. Bitte einen echten Namen eintragen!');
+                        return;
+                    }
+                }
+                // ---------------------------------------------
 
                 try {
                     const now = new Date().toISOString();
