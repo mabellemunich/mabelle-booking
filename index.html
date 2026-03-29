@@ -1081,6 +1081,12 @@
 
             const [currentUser, setCurrentUser] = useState(null);
             const [employees, setEmployees] = useState([]);
+            
+            // NEU: Ein "Gedächtnis-Anker" (Ref), der immer die aktuellste Mitarbeiterliste hat, 
+            // auch wenn der Face-ID Scan schon vor dem Lade-Ende gestartet wurde!
+            const employeesRef = useRef(employees);
+            useEffect(() => { employeesRef.current = employees; }, [employees]);
+
             const [reservations, setReservations] = useState([]);
             const [tableLayout, setTableLayout] = useState([]); 
             const [pacingSettings, setPacingSettings] = useState(null);
@@ -1201,7 +1207,7 @@
                         // (es sei denn, dieses Gerät ist als "Laden-Tablet" markiert)
                         if (window.PublicKeyCredential && !bioData && !isSharedDevice) {
                             
-                            // NEU: Single-Device-Sperre checken!
+                            // Single-Device-Sperre checken!
                             // Wenn der Nutzer schon ein verknüpftes Handy hat und NICHT der Admin ist, blockieren.
                             if (user.hasBiometric && user.role !== 'admin') {
                                 alert(`Sicherheitssperre: Ihr Profil (${user.name}) ist bereits fest mit einem anderen Gerät verknüpft.\n\nBitte wenden Sie sich an einen Admin, um Ihr altes Gerät zu trennen, bevor Sie ein neues einrichten.`);
@@ -1239,7 +1245,14 @@
                 setView('book');
             };
 
-            const handleLogout = () => { setCurrentUser(null); setView('landing'); };
+            const handleLogout = () => { 
+                setCurrentUser(null); 
+                // NEU: Wenn es ein Laden-Tablet oder ein Gerät mit Face-ID ist, springt es immer direkt wieder zum Login (Numpad oder Auto-Scan) anstatt auf den Startbildschirm. Spart einen Klick!
+                const currentBio = localStorage.getItem('mabelle_biometric');
+                const currentShared = localStorage.getItem('mabelle_shared_device') === 'true';
+                setView((currentBio || currentShared) ? 'login' : 'landing'); 
+            };
+            
             const handleNumpadClick = (num) => { 
                 if (lockoutTime > 0) return; 
                 if (pinInput.length < 4) setPinInput(prev => prev + num); 
@@ -1278,11 +1291,12 @@
 
                     if(credential) {
                         const credId = bufferToBase64url(credential.rawId);
-                        const newBioData = { empId: pendingUser.id, credId, expires: Date.now() + (30 * 24 * 60 * 60 * 1000) };
+                        // LÖSUNG "30-Tage Falle": 3650 Tage (10 Jahre) Gültigkeit im lokalen Speicher, da Face-ID ohnehin bei jedem Start scannt. Verhindert unnötige Aussperrungen.
+                        const newBioData = { empId: pendingUser.id, credId, expires: Date.now() + (3650 * 24 * 60 * 60 * 1000) };
                         localStorage.setItem('mabelle_biometric', JSON.stringify(newBioData));
                         setBioData(newBioData);
                         
-                        // NEU: Dem System (Firestore) mitteilen, dass der Nutzer jetzt verknüpft ist!
+                        // Dem System (Firestore) mitteilen, dass der Nutzer jetzt verknüpft ist!
                         await db.collection("employees").doc(pendingUser.id).update({ hasBiometric: true });
                         
                         doLogin(pendingUser);
@@ -1303,7 +1317,7 @@
 
                     await navigator.credentials.get({
                         publicKey: {
-                            challenge: challenge.buffer, // WICHTIG: .buffer
+                            challenge: challenge.buffer, 
                             rpId: rpId,
                             allowCredentials: [{ type: "public-key", id: base64urlToBuffer(bioData.credId) }],
                             userVerification: "required",
@@ -1311,8 +1325,30 @@
                         }
                     });
                     
-                    const user = employees.find(e => e.id === bioData.empId);
+                    // Wir schauen zuerst in den "Gedächtnis-Anker", ob die Liste inzwischen geladen ist
+                    let user = employeesRef.current.find(e => e.id === bioData.empId);
+                    
+                    // Fallback: Falls die App *wirklich* zu schnell war, laden wir den Nutzer explizit und direkt aus der Cloud nach!
+                    if (!user) {
+                        try {
+                            const userDoc = await db.collection("employees").doc(bioData.empId).get();
+                            if (userDoc.exists) {
+                                user = { id: userDoc.id, ...userDoc.data() };
+                            }
+                        } catch(err) { console.error("Fallback Fetch Error", err); }
+                    }
+
                     if (user) {
+                        // LÖSUNG "Altes Handy Geist": 
+                        // Wir prüfen, ob der Admin das Gerät zwischenzeitlich in der Datenbank gelöscht hat!
+                        if (user.hasBiometric === false && user.role !== 'admin') {
+                            alert("Ihre Geräte-Verknüpfung wurde von einem Admin zurückgesetzt. Bitte melden Sie sich mit Ihrer PIN an, um Ihr Profil neu zu verknüpfen.");
+                            localStorage.removeItem('mabelle_biometric');
+                            setBioData(null);
+                            setView('login');
+                            return;
+                        }
+                        
                         doLogin(user);
                     } else {
                         alert("Benutzerprofil nicht gefunden.");
@@ -1321,8 +1357,6 @@
                     }
                 } catch (e) {
                     console.error("Biometrie Fehler:", e);
-                    // Wenn es der Auto-Scan war, nerven wir den Nutzer nicht mit einem Alert, 
-                    // sondern lassen ihn einfach auf den Button klicken für einen neuen Versuch.
                     if (!isAuto) {
                         alert("Login per Scan fehlgeschlagen. Bitte versuchen Sie es erneut.");
                     }
@@ -1381,13 +1415,11 @@
                                 <div className="mx-auto bg-amber-100 dark:bg-amber-900/40 text-amber-600 w-20 h-20 flex items-center justify-center rounded-full mb-6">
                                     <ScanFace size={40} />
                                 </div>
-                                {/* NEU: Namens-Anzeige vereinfacht */}
                                 <h2 className={`text-2xl font-bold mb-8 ${theme.text}`}>Willkommen {knownUser ? knownUser.name : ''}</h2>
                                 
-                                <button onClick={loginBiometrics} className="w-full py-4 bg-amber-600 text-white rounded-xl font-bold text-lg hover:bg-amber-700 active:scale-95 transition-all shadow-md flex items-center justify-center gap-2">
+                                <button onClick={() => loginBiometrics(false)} className="w-full py-4 bg-amber-600 text-white rounded-xl font-bold text-lg hover:bg-amber-700 active:scale-95 transition-all shadow-md flex items-center justify-center gap-2">
                                     <ScanFace size={24} /> Mit Face-ID / Scan anmelden
                                 </button>
-                                {/* NEU: Der "Anderer Mitarbeiter"-Button wurde restlos entfernt */}
                             </div>
                         </div>
                     );
@@ -1455,7 +1487,9 @@
                             </>
                         )}
 
-                        <div className="flex flex-col gap-3"><button onClick={() => setView('landing')} className={`w-full py-3 rounded-xl font-medium transition-colors ${theme.textMuted} ${theme.hover}`}>Abbrechen</button></div>
+                        <div className="flex flex-col gap-3">
+                            <button onClick={() => setView('landing')} className={`w-full py-3 rounded-xl font-medium transition-colors ${theme.textMuted} ${theme.hover}`}>Abbrechen</button>
+                        </div>
                     </div>
                 </div>
                 );
