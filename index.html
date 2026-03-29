@@ -496,7 +496,7 @@
         };
 
         // --- RESERVATION BOOK ---
-        const ReservationBook = ({ currentUser, handleLogout, theme, isDarkMode, toggleDarkMode, setView, reservations, db, tableLayout, pacingSettings }) => {
+        const ReservationBook = ({ currentUser, handleLogout, theme, isDarkMode, toggleDarkMode, setView, reservations, db, tableLayout, pacingSettings, forceSync, isSyncing }) => {
             const [currentDate, setCurrentDate] = useState(new Date());
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [showTableSelector, setShowTableSelector] = useState(false); 
@@ -745,12 +745,22 @@
                 <div className={`min-h-screen font-sans transition-colors duration-300 ${theme.bg} ${theme.text}`}>
                     <header className={`shadow-sm sticky top-0 z-10 transition-colors duration-300 ${theme.header}`}>
                         <div className="max-w-5xl mx-auto px-4 py-4 relative">
-                            <div className="absolute top-4 left-4 flex gap-1 md:hidden z-20"><button onClick={() => setView('admin')} className="p-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"><Shield size={20} /></button><button onClick={toggleDarkMode} className={`p-2 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-amber-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'}`}>{isDarkMode ? <Sun size={20} /> : <Moon size={20} />}</button></div>
+                            <div className="absolute top-4 left-4 flex gap-1 md:hidden z-20">
+                                <button onClick={() => setView('admin')} className="p-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"><Shield size={20} /></button>
+                                <button onClick={toggleDarkMode} className={`p-2 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-amber-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'}`}>{isDarkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
+                                <button onClick={forceSync} className={`p-2 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-blue-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-blue-500 hover:bg-stone-50'}`} title="Synchronisieren"><RotateCcw size={20} className={isSyncing ? 'animate-spin' : ''} /></button>
+                            </div>
                             <button onClick={handleLogout} className={`absolute top-4 right-4 p-2 rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-50 md:hidden z-20`}><LogOut size={20} /></button>
                             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                                 <div className="flex items-center gap-1.5"><div className="bg-amber-600 p-2 rounded-lg text-white self-start mt-0.5"><Coffee size={24} /></div><div className="flex flex-col"><h1 className={`text-3xl font-mabelle tracking-widest uppercase leading-none ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>MABELLE</h1><span className="text-amber-600 font-sans text-xs font-bold uppercase tracking-[0.2em] leading-tight pt-1">Reservierungen</span></div></div>
                                 <div className={`flex items-center rounded-full px-2 py-1 border shadow-inner transition-colors ${theme.navBg}`}><button onClick={handlePrevDay} className={`p-2 rounded-full transition-all z-10 relative ${isDarkMode ? 'hover:bg-stone-700 text-stone-400' : 'hover:bg-white text-stone-500'} hover:text-amber-600`}><ChevronLeft size={20} /></button><div className={`relative flex items-center justify-center gap-2 px-3 py-1.5 min-w-[180px] font-medium cursor-pointer group hover:text-amber-600 transition-colors rounded-md mx-1 ${isDarkMode ? 'text-stone-300 hover:bg-stone-800' : 'text-stone-700 hover:bg-stone-100'}`} onClick={() => setShowCalendar(true)}><CalendarIcon size={16} className="text-amber-600 shrink-0" /><span className="pointer-events-none select-none text-base whitespace-nowrap">{formatDateDE(currentDate)}</span></div><button onClick={handleNextDay} className={`p-2 rounded-full transition-all z-10 relative ${isDarkMode ? 'hover:bg-stone-700 text-stone-400' : 'hover:bg-white text-stone-500'} hover:text-amber-600`}><ChevronRight size={20} /></button></div>
-                                <div className="hidden md:flex gap-2 items-center">{currentUser.role === 'admin' && <button onClick={() => setView('admin')} className="p-2.5 rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-50 bg-white" title="Admin Dashboard"><Shield size={20} /></button>}<button onClick={toggleDarkMode} className={`p-2.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-amber-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'}`}>{isDarkMode ? <Sun size={20} /> : <Moon size={20} />}</button><button onClick={handleLogout} className="p-2.5 rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-100 bg-white" title="Abmelden"><LogOut size={20} /></button>{currentUser.role !== 'chef' && <button onClick={openAddModal} className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg shadow-md flex items-center gap-2 font-medium transition-all active:scale-95"><Plus size={20} /><span>Neue Reservierung</span></button>}</div>
+                                <div className="hidden md:flex gap-2 items-center">
+                                    <button onClick={forceSync} className={`p-2.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-blue-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-blue-500 hover:bg-stone-50'}`} title="Daten jetzt synchronisieren"><RotateCcw size={20} className={isSyncing ? 'animate-spin' : ''} /></button>
+                                    {currentUser.role === 'admin' && <button onClick={() => setView('admin')} className="p-2.5 rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-50 bg-white" title="Admin Dashboard"><Shield size={20} /></button>}
+                                    <button onClick={toggleDarkMode} className={`p-2.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-amber-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'}`}>{isDarkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
+                                    <button onClick={handleLogout} className="p-2.5 rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-100 bg-white" title="Abmelden"><LogOut size={20} /></button>
+                                    {currentUser.role !== 'chef' && <button onClick={openAddModal} className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg shadow-md flex items-center gap-2 font-medium transition-all active:scale-95"><Plus size={20} /><span>Neue Reservierung</span></button>}
+                                </div>
                             </div>
                             <div className="mt-6 flex flex-col md:flex-row justify-between items-end gap-4">
                                 <div className="flex justify-between items-stretch w-full md:w-auto md:justify-start gap-3">
@@ -1058,6 +1068,39 @@
                 return localStorage.getItem('mabelle_shared_device') === 'true';
             });
 
+            // --- NEU: MANUELLE & AUTO-SYNC LOGIK ---
+            const [isSyncing, setIsSyncing] = useState(false);
+
+            const forceSync = async () => {
+                if (isSyncing) return;
+                setIsSyncing(true);
+                try {
+                    // Startet die Datenbankverbindung hart neu, um feststeckende Caches zu lösen
+                    await db.disableNetwork();
+                    await db.enableNetwork();
+                } catch (e) { 
+                    console.error("Sync Error", e); 
+                }
+                setTimeout(() => setIsSyncing(false), 800); // 800ms Lade-Animation
+            };
+
+            // Auto-Sync wenn Tablet aufwacht (Bildschirm an oder Tab geöffnet)
+            useEffect(() => {
+                const handleVisibility = () => {
+                    if (document.visibilityState === 'visible') forceSync();
+                };
+                const handleFocus = () => forceSync();
+
+                document.addEventListener("visibilitychange", handleVisibility);
+                window.addEventListener("focus", handleFocus);
+                
+                return () => {
+                    document.removeEventListener("visibilitychange", handleVisibility);
+                    window.removeEventListener("focus", handleFocus);
+                };
+            }, []);
+            // ----------------------------------------
+
             const toggleSharedDevice = () => {
                 const newValue = !isSharedDevice;
                 setIsSharedDevice(newValue);
@@ -1346,7 +1389,7 @@
                 );
             }
             if (view === 'admin') return <AdminView employees={employees} reservations={reservations} setView={setView} theme={theme} isDarkMode={isDarkMode} db={db} tableLayout={tableLayout} pacingSettings={pacingSettings} isSharedDevice={isSharedDevice} toggleSharedDevice={toggleSharedDevice} />;
-            return <ReservationBook currentUser={currentUser} handleLogout={handleLogout} theme={theme} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} setView={setView} reservations={reservations} db={db} tableLayout={tableLayout} pacingSettings={pacingSettings} />;
+            return <ReservationBook currentUser={currentUser} handleLogout={handleLogout} theme={theme} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} setView={setView} reservations={reservations} db={db} tableLayout={tableLayout} pacingSettings={pacingSettings} forceSync={forceSync} isSyncing={isSyncing} />;
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
