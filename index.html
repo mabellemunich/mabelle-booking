@@ -1056,7 +1056,29 @@
 
         // --- 8. APP WRAPPER & INIT ---
         const App = () => {
-            const [view, setView] = useState('landing'); 
+            // --- 1. LOKALE SPEICHER-CHECKS (Für Schnellstart) ---
+            const [bioData, setBioData] = useState(() => {
+                try {
+                    const stored = localStorage.getItem('mabelle_biometric');
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        if (Date.now() > parsed.expires) {
+                            localStorage.removeItem('mabelle_biometric');
+                            return null;
+                        }
+                        return parsed;
+                    }
+                } catch(e) {}
+                return null;
+            });
+
+            const [isSharedDevice, setIsSharedDevice] = useState(() => {
+                return localStorage.getItem('mabelle_shared_device') === 'true';
+            });
+
+            // 2. Start-Ansicht berechnen: Direkt zum Login, wenn Face-ID oder Kassen-Tablet aktiv ist!
+            const [view, setView] = useState((bioData || isSharedDevice) ? 'login' : 'landing'); 
+
             const [currentUser, setCurrentUser] = useState(null);
             const [employees, setEmployees] = useState([]);
             const [reservations, setReservations] = useState([]);
@@ -1073,37 +1095,17 @@
             const [pinInput, setPinInput] = useState('');
             const [loginError, setLoginError] = useState(false);
             
-            // --- NEU: SICHERHEITS-STATES FÜR LOCKOUT ---
+            // --- SICHERHEITS-STATES FÜR LOCKOUT ---
             const [failedAttempts, setFailedAttempts] = useState(0);
             const [lockoutTime, setLockoutTime] = useState(0);
             
-            // --- NEU: BIOMETRIE STATES ---
-            const [bioData, setBioData] = useState(() => {
-                try {
-                    const stored = localStorage.getItem('mabelle_biometric');
-                    if (stored) {
-                        const parsed = JSON.parse(stored);
-                        if (Date.now() > parsed.expires) {
-                            localStorage.removeItem('mabelle_biometric');
-                            return null;
-                        }
-                        return parsed;
-                    }
-                } catch(e) {}
-                return null;
-            });
             const [pendingUser, setPendingUser] = useState(null);
             const [showBiometricSetup, setShowBiometricSetup] = useState(false);
 
-            // --- NEU: SHARED DEVICE STATE ---
-            const [isSharedDevice, setIsSharedDevice] = useState(() => {
-                return localStorage.getItem('mabelle_shared_device') === 'true';
-            });
-
-            // --- NEU: MANUELLE & AUTO-SYNC LOGIK ---
+            // --- MANUELLE & AUTO-SYNC LOGIK ---
             const [isSyncing, setIsSyncing] = useState(false);
             
-            // --- NEU: AUTO-SCAN STATE ---
+            // --- AUTO-SCAN STATE ---
             const [autoScanTriggered, setAutoScanTriggered] = useState(false);
 
             const forceSync = async () => {
