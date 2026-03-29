@@ -1155,23 +1155,36 @@
             // --- WEBAUTHN REGISTRIERUNG ---
             const registerBiometrics = async () => {
                 try {
-                    const randomId = new Uint8Array(16); crypto.getRandomValues(randomId);
-                    const challenge = new Uint8Array(32); crypto.getRandomValues(challenge);
+                    const randomId = new Uint8Array(16); window.crypto.getRandomValues(randomId);
+                    const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
+                    
+                    // Domain-Erkennung für Apple optimiert
+                    const hostname = window.location.hostname;
+                    const rpConfig = { name: "MABELLE Booking" };
+                    if (hostname !== 'localhost' && !hostname.match(/^\d/)) {
+                        rpConfig.id = hostname;
+                    }
                     
                     const credential = await navigator.credentials.create({
                         publicKey: {
-                            challenge,
-                            rp: { name: "MABELLE Booking", id: window.location.hostname },
-                            user: { id: randomId, name: pendingUser.name, displayName: pendingUser.name },
+                            // WICHTIG: .buffer für strenge Apple-Geräte
+                            challenge: challenge.buffer, 
+                            rp: rpConfig,
+                            user: { 
+                                id: randomId.buffer, // WICHTIG: .buffer für strenge Apple-Geräte
+                                name: pendingUser.name, 
+                                displayName: pendingUser.name 
+                            },
                             pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-                            authenticatorSelection: { userVerification: "required" },
+                            authenticatorSelection: { 
+                                userVerification: "required" 
+                            },
                             timeout: 60000
                         }
                     });
 
                     if(credential) {
                         const credId = bufferToBase64url(credential.rawId);
-                        // Speichere 30-Tage Token im lokalen Speicher des Geräts
                         const newBioData = { empId: pendingUser.id, credId, expires: Date.now() + (30 * 24 * 60 * 60 * 1000) };
                         localStorage.setItem('mabelle_biometric', JSON.stringify(newBioData));
                         setBioData(newBioData);
@@ -1179,19 +1192,22 @@
                     }
                 } catch (e) {
                     console.error("Biometrie Fehler:", e);
-                    alert("Sicherheits-Scan abgebrochen oder fehlgeschlagen. Bitte versuchen Sie es erneut.");
-                    // WICHTIG: Hier wurde der Auto-Login für Mitarbeiter entfernt! 
-                    // Wenn der Scan abgebrochen wird, bleiben sie ausgesperrt.
+                    alert("Sicherheits-Scan fehlgeschlagen:\n" + e.message);
                 }
             };
 
             // --- WEBAUTHN LOGIN ---
             const loginBiometrics = async () => {
                 try {
-                    const challenge = new Uint8Array(32); crypto.getRandomValues(challenge);
+                    const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
+                    
+                    const hostname = window.location.hostname;
+                    const rpId = (hostname !== 'localhost' && !hostname.match(/^\d/)) ? hostname : undefined;
+
                     await navigator.credentials.get({
                         publicKey: {
-                            challenge,
+                            challenge: challenge.buffer, // WICHTIG: .buffer
+                            rpId: rpId,
                             allowCredentials: [{ type: "public-key", id: base64urlToBuffer(bioData.credId) }],
                             userVerification: "required",
                             timeout: 60000
