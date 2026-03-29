@@ -1102,6 +1102,9 @@
 
             // --- NEU: MANUELLE & AUTO-SYNC LOGIK ---
             const [isSyncing, setIsSyncing] = useState(false);
+            
+            // --- NEU: AUTO-SCAN STATE ---
+            const [autoScanTriggered, setAutoScanTriggered] = useState(false);
 
             const forceSync = async () => {
                 if (isSyncing) return;
@@ -1289,7 +1292,7 @@
             };
 
             // --- WEBAUTHN LOGIN ---
-            const loginBiometrics = async () => {
+            const loginBiometrics = async (isAuto = false) => {
                 try {
                     const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
                     
@@ -1307,19 +1310,40 @@
                     });
                     
                     const user = employees.find(e => e.id === bioData.empId);
-                    if (user) doLogin(user);
-                    else {
+                    if (user) {
+                        doLogin(user);
+                    } else {
                         alert("Benutzerprofil nicht gefunden.");
                         localStorage.removeItem('mabelle_biometric');
                         setBioData(null);
                     }
                 } catch (e) {
                     console.error("Biometrie Fehler:", e);
-                    alert("Login per Scan fehlgeschlagen. Bitte nutzen Sie Ihre PIN.");
-                    localStorage.removeItem('mabelle_biometric');
-                    setBioData(null);
+                    // Wenn es der Auto-Scan war, nerven wir den Nutzer nicht mit einem Alert, 
+                    // sondern lassen ihn einfach auf den Button klicken für einen neuen Versuch.
+                    if (!isAuto) {
+                        alert("Login per Scan fehlgeschlagen. Bitte versuchen Sie es erneut.");
+                    }
                 }
             };
+
+            // --- AUTO-TRIGGER LOGIK ---
+            useEffect(() => {
+                if (view !== 'login') {
+                    setAutoScanTriggered(false); // Reset, wenn wir die Login-Ansicht verlassen
+                }
+            }, [view]);
+
+            useEffect(() => {
+                // Wenn wir auf der Login-Seite sind, ein Token existiert und wir noch keinen Auto-Scan probiert haben:
+                if (view === 'login' && bioData && !showBiometricSetup && !isSharedDevice && !autoScanTriggered) {
+                    setAutoScanTriggered(true);
+                    // 300ms Verzögerung, damit die Benutzeroberfläche erst sanft laden kann
+                    setTimeout(() => {
+                        loginBiometrics(true);
+                    }, 300);
+                }
+            }, [view, bioData, showBiometricSetup, isSharedDevice, autoScanTriggered]);
 
             useEffect(() => {
                 if (!currentUser) return; 
