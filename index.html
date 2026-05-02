@@ -143,6 +143,10 @@
 
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
+            // STABILITÄT: Offline Persistence für Ausfallsicherheit aktivieren!
+            firebase.firestore().enablePersistence({ synchronizeTabs: true }).catch((err) => {
+                console.warn("Offline-Modus konnte nicht aktiviert werden:", err);
+            });
         }
         const db = firebase.firestore();
         const auth = firebase.auth();
@@ -196,7 +200,7 @@
         const Check = (p) => <IconBase {...p}><polyline points="20 6 9 17 4 12"/></IconBase>;
         const Square = (p) => <IconBase {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></IconBase>;
         const Circle = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/></IconBase>;
-        const DoorOpen = (p) => <IconBase {...p}><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></IconBase>;
+        const DoorOpen = (p) => <IconBase {...p}><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></IconBase>;
         const Maximize = (p) => <IconBase {...p}><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></IconBase>;
         const Minus = (p) => <IconBase {...p}><path d="M5 12h14"/></IconBase>;
         const Copy = (p) => <IconBase {...p}><rect width="13" height="13" x="9" y="9" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconBase>;
@@ -396,7 +400,6 @@
             const [editingEmpId, setEditingEmpId] = useState(null);
             const [error, setError] = useState('');
 
-            // Pacing Settings State
             const [timeBlocksStr, setTimeBlocksStr] = useState(pacingSettings?.timeBlocks ? pacingSettings.timeBlocks.join(', ') : '17:00-19:30, 19:30-22:00');
             const [warnThresh, setWarnThresh] = useState(pacingSettings?.warning || 20);
             const [dangerThresh, setDangerThresh] = useState(pacingSettings?.danger || 30);
@@ -428,8 +431,8 @@
                 try {
                     await db.collection("settings").doc("pacing").set({
                         timeBlocks: blocksArr,
-                        warning: parseInt(warnThresh, 10),
-                        danger: parseInt(dangerThresh, 10)
+                        warning: parseInt(warnThresh || 20, 10),
+                        danger: parseInt(dangerThresh || 30, 10)
                     });
                     alert("Einstellungen gespeichert!");
                 } catch(e) { alert("Fehler beim Speichern"); }
@@ -539,7 +542,6 @@
             const [formData, setFormData] = useState({ name: '', time: '18:00', pax: 2, table: '', phone: '', instagram: '', notes: '', date: '' });
             const [tempSelectedTables, setTempSelectedTables] = useState([]);
 
-            // NEU: Auto-Complete Vorschläge State
             const [activeSuggestions, setActiveSuggestions] = useState({ field: null, items: [] });
 
             const [realTime, setRealTime] = useState(new Date());
@@ -584,15 +586,15 @@
                 const { name, value } = e.target; 
                 setFormData(prev => ({ ...prev, [name]: value }));
                 
-                // --- CRM VORSCHLAG-LOGIK ---
+                // STABILITÄT: Sicheres String-Parsing
                 if (name === 'phone') {
-                    const cleanInput = value.replace(/[\s\-\+\/]/g, '');
+                    const cleanInput = String(value).replace(/[\s\-\+\/]/g, '');
                     if (cleanInput.length >= 7) {
                         const matches = [];
                         const seen = new Set();
                         [...reservations].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(r => {
                             if (r.phone) {
-                                const cleanRPhone = r.phone.replace(/[\s\-\+\/]/g, '');
+                                const cleanRPhone = String(r.phone).replace(/[\s\-\+\/]/g, '');
                                 if (cleanRPhone.includes(cleanInput) && !seen.has(cleanRPhone)) {
                                     seen.add(cleanRPhone);
                                     matches.push({ name: r.name, phone: r.phone, instagram: r.instagram });
@@ -604,13 +606,13 @@
                         setActiveSuggestions({ field: null, items: [] });
                     }
                 } else if (name === 'instagram') {
-                    const cleanInput = value.replace(/^@/, '').trim().toLowerCase();
+                    const cleanInput = String(value).replace(/^@/, '').trim().toLowerCase();
                     if (cleanInput.length >= 4) {
                         const matches = [];
                         const seen = new Set();
                         [...reservations].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(r => {
                             if (r.instagram) {
-                                const cleanRIg = r.instagram.replace(/^@/, '').trim().toLowerCase();
+                                const cleanRIg = String(r.instagram).replace(/^@/, '').trim().toLowerCase();
                                 if (cleanRIg.includes(cleanInput) && !seen.has(cleanRIg)) {
                                     seen.add(cleanRIg);
                                     matches.push({ name: r.name, phone: r.phone, instagram: r.instagram });
@@ -637,8 +639,10 @@
             };
 
             const toggleTag = (label) => { setFormData(prev => { let currentNotes = prev.notes || ""; const lines = currentNotes.split('\n'); if (lines.includes(label)) { const newNotes = lines.filter(l => l !== label).join('\n'); return { ...prev, notes: newNotes.trim() }; } else { const newNotes = label + (currentNotes ? '\n' + currentNotes : ''); return { ...prev, notes: newNotes }; } }); };
+            
             const handleTimeChange = (part, value) => {
-                const [h, m] = formData.time.split(':');
+                // STABILITÄT: Fallback falls Zeit fehlt
+                const [h, m] = (formData.time || '18:00').split(':');
                 if (part === 'h') setFormData(prev => ({ ...prev, time: `${value}:${m}` }));
                 if (part === 'm') setFormData(prev => ({ ...prev, time: `${h}:${value}` }));
             };
@@ -646,31 +650,26 @@
             const pastNoShows = useMemo(() => {
                 const checkPhone = (formData.phone || '').trim();
                 const checkIg = (formData.instagram || '').trim();
-                
                 if (!checkPhone && !checkIg) return [];
-                
                 return reservations.filter(r => 
                     r.status === 'no-show' && 
                     (
-                        (checkPhone && r.phone && r.phone.replace(/[\s\-\+\/]/g, '') === checkPhone.replace(/[\s\-\+\/]/g, '')) || 
-                        (checkIg && r.instagram && r.instagram.trim().toLowerCase() === checkIg.replace(/^@/, '').toLowerCase())
+                        (checkPhone && r.phone && String(r.phone).replace(/[\s\-\+\/]/g, '') === checkPhone.replace(/[\s\-\+\/]/g, '')) || 
+                        (checkIg && r.instagram && String(r.instagram).trim().toLowerCase() === checkIg.replace(/^@/, '').toLowerCase())
                     )
                 ).sort((a, b) => new Date(b.date) - new Date(a.date));
             }, [formData.phone, formData.instagram, reservations]);
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
-                
                 const phoneVal = (formData.phone || '').trim();
                 const igVal = (formData.instagram || '').trim();
                 
                 if (!phoneVal && !igVal) { alert('Bitte geben Sie eine Telefonnummer oder einen Instagram-Namen an!'); return; }
-
                 if (phoneVal) {
                     const cleanPhone = phoneVal.replace(/[\s\-\+\/]/g, ''); 
                     if (cleanPhone.length > 0 && cleanPhone.length < 7) { alert('Die Telefonnummer ist zu kurz (mindestens 7 Zeichen).'); return; }
                 }
-
                 if (igVal) {
                     const cleanIg = igVal.replace(/^@/, '').trim();
                     if (cleanIg.length > 0 && cleanIg.length < 4) { alert('Der Instagram-Name ist zu kurz (mindestens 4 Zeichen).'); return; }
@@ -681,13 +680,14 @@
                     const [y, m, d] = formData.date.split('-').map(Number);
                     const newDateObj = new Date(y, m - 1, d);
                     const newDateString = newDateObj.toDateString();
-                    // Name wird auch getrimmt, damit keine Suchfehler entstehen
-                    const cleanData = { ...formData, name: formData.name.trim(), phone: phoneVal, instagram: igVal };
+                    // STABILITÄT: Safe Integer Parsing
+                    const safePax = parseInt(formData.pax || 0, 10);
+                    const cleanData = { ...formData, name: (formData.name || '').trim(), phone: phoneVal, instagram: igVal, pax: safePax };
 
                     if (editingId) {
-                        await db.collection("reservations").doc(editingId).update({ ...cleanData, date: newDateString, pax: parseInt(formData.pax, 10), updatedBy: currentUser.name, updatedAt: now });
+                        await db.collection("reservations").doc(editingId).update({ ...cleanData, date: newDateString, updatedBy: currentUser.name, updatedAt: now });
                     } else {
-                        const newRes = { ...cleanData, date: newDateString, pax: parseInt(formData.pax, 10), status: 'confirmed', createdBy: currentUser.name, createdAt: now, updatedBy: null, updatedAt: null };
+                        const newRes = { ...cleanData, date: newDateString, status: 'confirmed', createdBy: currentUser.name, createdAt: now, updatedBy: null, updatedAt: null };
                         await db.collection("reservations").add(newRes);
                     }
                     closeModal();
@@ -751,11 +751,9 @@
                         if (startStr && endStr) {
                             const startMins = timeToMinutes(startStr);
                             const endMins = timeToMinutes(endStr);
-                            
                             let isMatch = false;
                             if (startMins <= endMins) { isMatch = (resMins >= startMins && resMins < endMins); } 
                             else { isMatch = (resMins >= startMins || resMins < endMins); }
-                            
                             if (isMatch) pStats[block].pax += parseInt(res.pax || 0, 10);
                         }
                     });
@@ -777,14 +775,14 @@
                             <div className="absolute top-4 left-4 flex gap-1 md:hidden z-20">
                                 <button onClick={() => setView('admin')} className="p-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"><Shield size={20} /></button>
                                 <button onClick={toggleDarkMode} className={`p-2 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-amber-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'}`}>{isDarkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
-                                <button onClick={forceSync} className={`p-2 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-blue-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-blue-500 hover:bg-stone-50'}`} title="Synchronisieren"><RotateCcw size={20} className={isSyncing ? 'animate-spin' : ''} /></button>
+                                <button onClick={forceSync} disabled={isSyncing} className={`p-2 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-blue-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-blue-500 hover:bg-stone-50'} ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`} title="Synchronisieren"><RotateCcw size={20} className={isSyncing ? 'animate-spin' : ''} /></button>
                             </div>
                             <button onClick={handleLogout} className={`absolute top-4 right-4 p-2 rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-50 md:hidden z-20`}><LogOut size={20} /></button>
                             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                                 <div className="flex items-center gap-1.5"><div className="bg-amber-600 p-2 rounded-lg text-white self-start mt-0.5"><Coffee size={24} /></div><div className="flex flex-col"><h1 className={`text-3xl font-mabelle tracking-widest uppercase leading-none ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>MABELLE</h1><span className="text-amber-600 font-sans text-xs font-bold uppercase tracking-[0.2em] leading-tight pt-1">Reservierungen</span></div></div>
                                 <div className={`flex items-center rounded-full px-2 py-1 border shadow-inner transition-colors ${theme.navBg}`}><button onClick={handlePrevDay} className={`p-2 rounded-full transition-all z-10 relative ${isDarkMode ? 'hover:bg-stone-700 text-stone-400' : 'hover:bg-white text-stone-500'} hover:text-amber-600`}><ChevronLeft size={20} /></button><div className={`relative flex items-center justify-center gap-2 px-3 py-1.5 min-w-[180px] font-medium cursor-pointer group hover:text-amber-600 transition-colors rounded-md mx-1 ${isDarkMode ? 'text-stone-300 hover:bg-stone-800' : 'text-stone-700 hover:bg-stone-100'}`} onClick={() => setShowCalendar(true)}><CalendarIcon size={16} className="text-amber-600 shrink-0" /><span className="pointer-events-none select-none text-base whitespace-nowrap">{formatDateDE(currentDate)}</span></div><button onClick={handleNextDay} className={`p-2 rounded-full transition-all z-10 relative ${isDarkMode ? 'hover:bg-stone-700 text-stone-400' : 'hover:bg-white text-stone-500'} hover:text-amber-600`}><ChevronRight size={20} /></button></div>
                                 <div className="hidden md:flex gap-2 items-center">
-                                    <button onClick={forceSync} className={`p-2.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-blue-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-blue-500 hover:bg-stone-50'}`} title="Daten jetzt synchronisieren"><RotateCcw size={20} className={isSyncing ? 'animate-spin' : ''} /></button>
+                                    <button onClick={forceSync} disabled={isSyncing} className={`p-2.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-blue-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-blue-500 hover:bg-stone-50'} ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`} title="Daten jetzt synchronisieren"><RotateCcw size={20} className={isSyncing ? 'animate-spin' : ''} /></button>
                                     {currentUser.role === 'admin' && <button onClick={() => setView('admin')} className="p-2.5 rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-50 bg-white" title="Admin Dashboard"><Shield size={20} /></button>}
                                     <button onClick={toggleDarkMode} className={`p-2.5 rounded-lg border transition-colors ${isDarkMode ? 'bg-stone-800 border-stone-600 text-amber-400 hover:bg-stone-700' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'}`}>{isDarkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
                                     <button onClick={handleLogout} className="p-2.5 rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-100 bg-white" title="Abmelden"><LogOut size={20} /></button>
@@ -944,7 +942,7 @@
                                         <div className="col-span-2 flex gap-2">
                                             <div className="w-1/2 min-w-0 relative">
                                                 <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Telefon</label>
-                                                <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="017..." className={`w-full min-w-0 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} autoFocus />
+                                                <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="017..." autoComplete="off" className={`w-full min-w-0 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} autoFocus />
                                                 {activeSuggestions.field === 'phone' && activeSuggestions.items.length > 0 && (
                                                     <div className={`absolute z-50 left-0 right-0 mt-1 rounded-lg shadow-xl border overflow-hidden ${theme.card} animate-dropdown max-h-48 overflow-y-auto`}>
                                                         {activeSuggestions.items.map((item, i) => (
@@ -958,7 +956,7 @@
                                             </div>
                                             <div className="w-1/2 min-w-0 relative">
                                                 <label className={`block text-sm font-medium mb-1 flex items-center gap-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Insta (@)</label>
-                                                <input type="text" name="instagram" value={formData.instagram} onChange={handleInputChange} placeholder="mabelle..." className={`w-full min-w-0 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} />
+                                                <input type="text" name="instagram" value={formData.instagram} onChange={handleInputChange} placeholder="mabelle..." autoComplete="off" className={`w-full min-w-0 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} />
                                                 {activeSuggestions.field === 'instagram' && activeSuggestions.items.length > 0 && (
                                                     <div className={`absolute z-50 left-0 right-0 mt-1 rounded-lg shadow-xl border overflow-hidden ${theme.card} animate-dropdown max-h-48 overflow-y-auto`}>
                                                         {activeSuggestions.items.map((item, i) => (
@@ -975,18 +973,18 @@
                                         {((formData.phone || '').replace(/[\s\-\+\/]/g, '').length >= 7 || (formData.instagram || '').replace(/^@/, '').trim().length >= 4) && (
                                             <div className="col-span-2 animate-slide-fade">
                                                 <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Name des Gastes</label>
-                                                <input required name="name" value={formData.name} onChange={handleInputChange} type="text" className={`w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} placeholder="z.B. Max Mustermann" />
+                                                <input required name="name" value={formData.name} onChange={handleInputChange} type="text" autoComplete="off" className={`w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} placeholder="z.B. Max Mustermann" />
                                             </div>
                                         )}
 
                                         <div className="col-span-2 flex gap-2">
-                                            <div className="w-1/2 min-w-0"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Uhrzeit</label><div className={`flex items-center w-full rounded-lg border px-1 py-2 focus-within:ring-2 focus-within:ring-amber-500 ${theme.input}`}><select value={formData.time.split(':')[0]} onChange={(e) => handleTimeChange('h', e.target.value)} className="w-1/2 text-center bg-transparent border-0 outline-none appearance-none time-select cursor-pointer">{hoursList.map(h => <option key={h} value={h} className={isDarkMode ? 'bg-stone-800' : 'bg-white'}>{h}</option>)}</select><span className="font-bold opacity-50 px-1">:</span><select value={formData.time.split(':')[1]} onChange={(e) => handleTimeChange('m', e.target.value)} className="w-1/2 text-center bg-transparent border-0 outline-none appearance-none time-select cursor-pointer">{minutesList.map(m => <option key={m} value={m} className={isDarkMode ? 'bg-stone-800' : 'bg-white'}>{m}</option>)}</select></div></div>
-                                            <div className="w-1/2 min-w-0"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Personen</label><div className="flex items-center w-full"><button type="button" onClick={() => setFormData(p => ({...p, pax: Math.max(1, parseInt(p.pax)-1)}))} className={`w-14 h-10 text-xl rounded-l-lg font-bold border-y border-l transition-colors active:bg-stone-300 dark:active:bg-stone-500 ${isDarkMode ? 'bg-stone-700 border-stone-600 text-stone-300 hover:bg-stone-600' : 'bg-stone-100 border-stone-200 text-stone-600 hover:bg-stone-200'}`}>-</button><input type="number" name="pax" value={formData.pax} onChange={handleInputChange} className={`w-full min-w-0 text-center border-y h-10 font-bold text-lg outline-none ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-100' : 'bg-white border-stone-200'}`} /><button type="button" onClick={() => setFormData(p => ({...p, pax: parseInt(p.pax)+1}))} className={`w-14 h-10 text-xl rounded-r-lg font-bold border-y border-r transition-colors active:bg-stone-300 dark:active:bg-stone-500 ${isDarkMode ? 'bg-stone-700 border-stone-600 text-stone-300 hover:bg-stone-600' : 'bg-stone-100 border-stone-200 text-stone-600 hover:bg-stone-200'}`}>+</button></div></div></div>
+                                            <div className="w-1/2 min-w-0"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Uhrzeit</label><div className={`flex items-center w-full rounded-lg border px-1 py-2 focus-within:ring-2 focus-within:ring-amber-500 ${theme.input}`}><select value={(formData.time || '18:00').split(':')[0]} onChange={(e) => handleTimeChange('h', e.target.value)} className="w-1/2 text-center bg-transparent border-0 outline-none appearance-none time-select cursor-pointer">{hoursList.map(h => <option key={h} value={h} className={isDarkMode ? 'bg-stone-800' : 'bg-white'}>{h}</option>)}</select><span className="font-bold opacity-50 px-1">:</span><select value={(formData.time || '18:00').split(':')[1]} onChange={(e) => handleTimeChange('m', e.target.value)} className="w-1/2 text-center bg-transparent border-0 outline-none appearance-none time-select cursor-pointer">{minutesList.map(m => <option key={m} value={m} className={isDarkMode ? 'bg-stone-800' : 'bg-white'}>{m}</option>)}</select></div></div>
+                                            <div className="w-1/2 min-w-0"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Personen</label><div className="flex items-center w-full"><button type="button" onClick={() => setFormData(p => ({...p, pax: Math.max(1, parseInt(p.pax || 0, 10)-1)}))} className={`w-14 h-10 text-xl rounded-l-lg font-bold border-y border-l transition-colors active:bg-stone-300 dark:active:bg-stone-500 ${isDarkMode ? 'bg-stone-700 border-stone-600 text-stone-300 hover:bg-stone-600' : 'bg-stone-100 border-stone-200 text-stone-600 hover:bg-stone-200'}`}>-</button><input type="number" name="pax" value={formData.pax} onChange={handleInputChange} className={`w-full min-w-0 text-center border-y h-10 font-bold text-lg outline-none ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-100' : 'bg-white border-stone-200'}`} /><button type="button" onClick={() => setFormData(p => ({...p, pax: parseInt(p.pax || 0, 10)+1}))} className={`w-14 h-10 text-xl rounded-r-lg font-bold border-y border-r transition-colors active:bg-stone-300 dark:active:bg-stone-500 ${isDarkMode ? 'bg-stone-700 border-stone-600 text-stone-300 hover:bg-stone-600' : 'bg-stone-100 border-stone-200 text-stone-600 hover:bg-stone-200'}`}>+</button></div></div></div>
                                         
                                         <div className="col-span-2">
                                             <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Tisch</label>
                                             <div className="flex relative">
-                                                <input type="text" name="table" value={formData.table} onChange={handleInputChange} placeholder="z.B. T12" className={`w-full min-w-0 rounded-lg border px-3 py-2 pr-10 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} />
+                                                <input type="text" name="table" value={formData.table} onChange={handleInputChange} placeholder="z.B. T12" autoComplete="off" className={`w-full min-w-0 rounded-lg border px-3 py-2 pr-10 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} />
                                                 <button type="button" onClick={() => openTableSelector()} className={`absolute right-1 top-1 p-1.5 rounded hover:bg-stone-200 dark:hover:bg-stone-700 text-amber-600 transition-colors`}><Square size={18}/></button>
                                             </div>
                                         </div>
@@ -1112,7 +1110,6 @@
             const [showBiometricSetup, setShowBiometricSetup] = useState(false);
 
             const [isSyncing, setIsSyncing] = useState(false);
-            
             const [autoScanTriggered, setAutoScanTriggered] = useState(false);
 
             const forceSync = async () => {
@@ -1124,7 +1121,6 @@
                 } catch (e) { 
                     console.error("Sync Error", e); 
                 } finally {
-                    // LÖSUNG: Timeout nun im finally-Block, damit es immer entsperrt wird
                     setTimeout(() => setIsSyncing(false), 800); 
                 }
             };
@@ -1153,14 +1149,14 @@
                 let unsubEmp, unsubRes, unsubPac, unsubTab;
 
                 auth.signInAnonymously().then(() => {
-                    // LÖSUNG KLON-BUG: "Chef" wird nur ein einziges Mal beim initialen Laden geprüft
+                    // Chef-Klon Bug Behoben: Prüft nur einmal, ob die Liste komplett leer ist.
                     db.collection("employees").get().then(snap => {
                         if (snap.empty) {
                             db.collection("employees").add({ name: 'Chef', pin: '9999', role: 'admin', hasBiometric: false });
                         }
                     }).catch(e => console.error("Init Error", e));
 
-                    // LÖSUNG MEMORY LEAK: Alle Listener werden gespeichert...
+                    // Sauberes Aufräumen von Listenern (Memory Leak Fix)
                     unsubEmp = db.collection("employees").onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         setEmployees(data);
@@ -1185,7 +1181,6 @@
                     setIsLoading(false);
                 }).catch((error) => { console.error("Auth Error", error); setIsLoading(false); });
 
-                // ... und hier sauber wieder beendet, wenn die Komponente neu lädt
                 return () => {
                     if (unsubEmp) unsubEmp();
                     if (unsubRes) unsubRes();
@@ -1310,14 +1305,26 @@
                 }
             }, [view, bioData, showBiometricSetup, isSharedDevice, autoScanTriggered]);
 
+            // PERFORMANCE-FIX: Ressourcen-schonender Auto-Logout
             useEffect(() => {
                 if (!currentUser) return; 
-                let timeoutId;
-                const resetTimer = () => { clearTimeout(timeoutId); timeoutId = setTimeout(() => { handleLogout(); }, 300000); };
-                const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
-                events.forEach(event => document.addEventListener(event, resetTimer));
-                resetTimer();
-                return () => { clearTimeout(timeoutId); events.forEach(event => document.removeEventListener(event, resetTimer)); };
+                let lastAction = Date.now();
+                
+                const updateTime = () => { lastAction = Date.now(); };
+                const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+                events.forEach(e => document.addEventListener(e, updateTime, { passive: true }));
+                
+                const interval = setInterval(() => {
+                    // Nach 5 Minuten Inaktivität ausloggen
+                    if (Date.now() - lastAction > 300000) {
+                        handleLogout();
+                    }
+                }, 10000); // Checkt nur noch alle 10 Sekunden (spart massiv CPU und Akku)
+
+                return () => { 
+                    events.forEach(e => document.removeEventListener(e, updateTime));
+                    clearInterval(interval);
+                };
             }, [currentUser]);
 
             const theme = {
