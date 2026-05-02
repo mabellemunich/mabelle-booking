@@ -89,7 +89,6 @@
             document.getElementById('error-text').innerText = msg + " (Zeile " + line + ")";
         };
 
-        // Das SVG-Icon der Tasse mit einem edlen, dunklen Hintergrund für das App-Logo
         const svgIconRaw = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="-4 -4 32 32">
             <rect x="-4" y="-4" width="32" height="32" fill="#1c1917" />
             <g fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -103,7 +102,6 @@
         
         const iconDataUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgIconRaw);
         
-        // Wir wandeln das SVG für Apple/Android automatisch in ein echtes PNG-Bild um!
         const img = new Image();
         img.onload = function() {
             const canvas = document.createElement('canvas');
@@ -112,7 +110,6 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, 512, 512);
             
-            // iOS & Android lieben echte PNGs als App-Icon
             const pngUrl = canvas.toDataURL('image/png'); 
             
             document.getElementById('apple-touch-icon').setAttribute('href', pngUrl);
@@ -410,16 +407,15 @@
                     const pinExists = employees.some(emp => emp.pin === empPin && emp.id !== editingEmpId);
                     if (pinExists) { setError('PIN bereits vergeben!'); return; }
                     try {
-                        if (editingEmpId) await db.collection("employees").doc(editingEmpId).update({ name: empName, pin: empPin, role: empRole });
-                        else await db.collection("employees").add({ name: empName, pin: empPin, role: empRole });
+                        if (editingEmpId) await db.collection("employees").doc(editingEmpId).update({ name: empName.trim(), pin: empPin, role: empRole });
+                        else await db.collection("employees").add({ name: empName.trim(), pin: empPin, role: empRole, hasBiometric: false });
                         setEmpName(''); setEmpPin(''); setEmpRole('staff'); setEditingEmpId(null);
                     } catch (e) { console.error(e); }
                 }
             };
             const startEdit = (emp) => { setEmpName(emp.name); setEmpPin(emp.pin); setEmpRole(emp.role); setEditingEmpId(emp.id); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-            const deleteEmployee = async (id) => { if (window.confirm('Löschen?')) await db.collection("employees").doc(id).delete(); };
+            const deleteEmployee = async (id) => { if (window.confirm('Löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.')) await db.collection("employees").doc(id).delete(); };
             
-            // NEU: Funktion zum Trennen des Geräts
             const resetDevice = async (id) => { 
                 if (window.confirm('Geräte-Verknüpfung (Face-ID) für diesen Mitarbeiter löschen? Er kann sein Profil danach auf einem neuen Handy registrieren.')) {
                     await db.collection("employees").doc(id).update({ hasBiometric: false });
@@ -536,20 +532,21 @@
             const [showPacing, setShowPacing] = useState(false);
             const [editingId, setEditingId] = useState(null);
             const [searchTerm, setSearchTerm] = useState('');
-            const [activeFilter, setActiveFilter] = useState('active'); // 'active' | 'completed'
+            const [activeFilter, setActiveFilter] = useState('active'); 
             const dateInputRef = useRef(null);
             const [showNoShowDetails, setShowNoShowDetails] = useState(false);
             
-            // FORM DATA mit neuem "instagram" Feld
             const [formData, setFormData] = useState({ name: '', time: '18:00', pax: 2, table: '', phone: '', instagram: '', notes: '', date: '' });
             const [tempSelectedTables, setTempSelectedTables] = useState([]);
 
-            // TIMER FÜR LIVE-STATUS UPDATE
+            // NEU: Auto-Complete Vorschläge State
+            const [activeSuggestions, setActiveSuggestions] = useState({ field: null, items: [] });
+
             const [realTime, setRealTime] = useState(new Date());
             useEffect(() => {
                 const intervalId = setInterval(() => {
                     setRealTime(new Date());
-                }, 30000); // Checkt jede halbe Minute
+                }, 30000);
                 return () => clearInterval(intervalId);
             }, []);
 
@@ -585,37 +582,58 @@
             
             const handleInputChange = (e) => { 
                 const { name, value } = e.target; 
-                setFormData(prev => {
-                    const updated = { ...prev, [name]: value };
-                    
-                    // --- MINI CRM: AUTO-FILL LOGIK ---
-                    const isPhoneTrigger = name === 'phone' && value.replace(/[\s\-\+\/]/g, '').length >= 8;
-                    const isIgTrigger = name === 'instagram' && value.replace(/^@/, '').trim().length >= 5;
-                    
-                    // Wenn Telefon (ab 8 Ziff.) oder Insta (ab 5 Z.) eingetippt wird und Name leer ist
-                    if ((isPhoneTrigger || isIgTrigger) && !prev.name) {
-                        const searchVal = value.trim().toLowerCase();
-                        
-                        // Finde den aktuellsten, vergangenen Eintrag für diese Nummer / dieses Insta
-                        const pastMatch = [...reservations].reverse().find(r => {
-                            if (name === 'phone' && r.phone) {
-                                // Entfernt Leerzeichen/Sonderzeichen für einen robusteren Abgleich
-                                return r.phone.replace(/[\s\-\+\/]/g, '') === value.replace(/[\s\-\+\/]/g, '');
+                setFormData(prev => ({ ...prev, [name]: value }));
+                
+                // --- CRM VORSCHLAG-LOGIK ---
+                if (name === 'phone') {
+                    const cleanInput = value.replace(/[\s\-\+\/]/g, '');
+                    if (cleanInput.length >= 7) {
+                        const matches = [];
+                        const seen = new Set();
+                        [...reservations].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(r => {
+                            if (r.phone) {
+                                const cleanRPhone = r.phone.replace(/[\s\-\+\/]/g, '');
+                                if (cleanRPhone.includes(cleanInput) && !seen.has(cleanRPhone)) {
+                                    seen.add(cleanRPhone);
+                                    matches.push({ name: r.name, phone: r.phone, instagram: r.instagram });
+                                }
                             }
-                            if (name === 'instagram' && r.instagram) {
-                                return r.instagram.trim().toLowerCase() === searchVal.replace(/^@/, '');
-                            }
-                            return false;
                         });
-                        
-                        // Wenn es einen Treffer gab, fülle den Namen automatisch aus!
-                        if (pastMatch && pastMatch.name) {
-                            updated.name = pastMatch.name;
-                        }
+                        setActiveSuggestions({ field: 'phone', items: matches.slice(0, 5) });
+                    } else {
+                        setActiveSuggestions({ field: null, items: [] });
                     }
-                    
-                    return updated;
-                }); 
+                } else if (name === 'instagram') {
+                    const cleanInput = value.replace(/^@/, '').trim().toLowerCase();
+                    if (cleanInput.length >= 4) {
+                        const matches = [];
+                        const seen = new Set();
+                        [...reservations].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(r => {
+                            if (r.instagram) {
+                                const cleanRIg = r.instagram.replace(/^@/, '').trim().toLowerCase();
+                                if (cleanRIg.includes(cleanInput) && !seen.has(cleanRIg)) {
+                                    seen.add(cleanRIg);
+                                    matches.push({ name: r.name, phone: r.phone, instagram: r.instagram });
+                                }
+                            }
+                        });
+                        setActiveSuggestions({ field: 'instagram', items: matches.slice(0, 5) });
+                    } else {
+                        setActiveSuggestions({ field: null, items: [] });
+                    }
+                } else {
+                    setActiveSuggestions({ field: null, items: [] });
+                }
+            };
+
+            const applySuggestion = (item) => {
+                setFormData(prev => ({
+                    ...prev,
+                    name: item.name || prev.name,
+                    phone: item.phone || prev.phone,
+                    instagram: item.instagram || prev.instagram
+                }));
+                setActiveSuggestions({ field: null, items: [] });
             };
 
             const toggleTag = (label) => { setFormData(prev => { let currentNotes = prev.notes || ""; const lines = currentNotes.split('\n'); if (lines.includes(label)) { const newNotes = lines.filter(l => l !== label).join('\n'); return { ...prev, notes: newNotes.trim() }; } else { const newNotes = label + (currentNotes ? '\n' + currentNotes : ''); return { ...prev, notes: newNotes }; } }); };
@@ -625,14 +643,12 @@
                 if (part === 'm') setFormData(prev => ({ ...prev, time: `${h}:${value}` }));
             };
 
-            // MINI CRM: NO-SHOW PRÜFUNG (LIVE BEIM EINTIPPEN)
             const pastNoShows = useMemo(() => {
                 const checkPhone = (formData.phone || '').trim();
                 const checkIg = (formData.instagram || '').trim();
                 
                 if (!checkPhone && !checkIg) return [];
                 
-                // Wir suchen in allen Reservierungen, ob diese Nummer/IG jemals "no-show" war.
                 return reservations.filter(r => 
                     r.status === 'no-show' && 
                     (
@@ -645,40 +661,28 @@
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 
-                // Pflicht-Check: Entweder Telefon ODER Instagram muss ausgefüllt sein.
                 const phoneVal = (formData.phone || '').trim();
                 const igVal = (formData.instagram || '').trim();
                 
-                if (!phoneVal && !igVal) {
-                    alert('Bitte geben Sie eine Telefonnummer oder einen Instagram-Namen an!');
-                    return;
-                }
+                if (!phoneVal && !igVal) { alert('Bitte geben Sie eine Telefonnummer oder einen Instagram-Namen an!'); return; }
 
-                // --- LÄNGEN-CHECK ---
                 if (phoneVal) {
                     const cleanPhone = phoneVal.replace(/[\s\-\+\/]/g, ''); 
-                    if (cleanPhone.length > 0 && cleanPhone.length < 8) {
-                        alert('Die Telefonnummer ist zu kurz (mindestens 8 Zeichen).');
-                        return;
-                    }
+                    if (cleanPhone.length > 0 && cleanPhone.length < 7) { alert('Die Telefonnummer ist zu kurz (mindestens 7 Zeichen).'); return; }
                 }
 
                 if (igVal) {
                     const cleanIg = igVal.replace(/^@/, '').trim();
-                    if (cleanIg.length > 0 && cleanIg.length < 5) {
-                        alert('Der Instagram-Name ist zu kurz (mindestens 5 Zeichen).');
-                        return;
-                    }
+                    if (cleanIg.length > 0 && cleanIg.length < 4) { alert('Der Instagram-Name ist zu kurz (mindestens 4 Zeichen).'); return; }
                 }
-                // ---------------------------------------------
 
                 try {
                     const now = new Date().toISOString();
                     const [y, m, d] = formData.date.split('-').map(Number);
                     const newDateObj = new Date(y, m - 1, d);
                     const newDateString = newDateObj.toDateString();
-
-                    const cleanData = { ...formData, phone: phoneVal, instagram: igVal };
+                    // Name wird auch getrimmt, damit keine Suchfehler entstehen
+                    const cleanData = { ...formData, name: formData.name.trim(), phone: phoneVal, instagram: igVal };
 
                     if (editingId) {
                         await db.collection("reservations").doc(editingId).update({ ...cleanData, date: newDateString, pax: parseInt(formData.pax, 10), updatedBy: currentUser.name, updatedAt: now });
@@ -690,9 +694,9 @@
                 } catch (e) { console.error("Error saving reservation: ", e); }
             };
 
-            const openAddModal = () => { setEditingId(null); setFormData({ name: '', time: '18:00', pax: 2, table: '', phone: '', instagram: '', notes: '', date: getIsoDate(currentDate) }); setShowNoShowDetails(false); setIsModalOpen(true); };
-            const openEditModal = (res) => { if (currentUser.role === 'chef') return; setEditingId(res.id); const d = new Date(res.date); setFormData({ name: res.name, time: res.time, pax: res.pax, table: res.table, phone: res.phone || '', instagram: res.instagram || '', notes: res.notes || '', date: getIsoDate(d) }); setShowNoShowDetails(false); setIsModalOpen(true); };
-            const closeModal = () => setIsModalOpen(false);
+            const openAddModal = () => { setEditingId(null); setFormData({ name: '', time: '18:00', pax: 2, table: '', phone: '', instagram: '', notes: '', date: getIsoDate(currentDate) }); setShowNoShowDetails(false); setActiveSuggestions({ field: null, items: [] }); setIsModalOpen(true); };
+            const openEditModal = (res) => { if (currentUser.role === 'chef') return; setEditingId(res.id); const d = new Date(res.date); setFormData({ name: res.name, time: res.time, pax: res.pax, table: res.table, phone: res.phone || '', instagram: res.instagram || '', notes: res.notes || '', date: getIsoDate(d) }); setShowNoShowDetails(false); setActiveSuggestions({ field: null, items: [] }); setIsModalOpen(true); };
+            const closeModal = () => { setIsModalOpen(false); setActiveSuggestions({ field: null, items: [] }); };
             const updateStatus = async (id, newStatus) => {
                 try {
                     const now = new Date().toISOString();
@@ -703,7 +707,7 @@
             const filteredReservations = useMemo(() => {
                 if (isPastCutoff) return [];
                 let filtered = reservations.filter(res => res.date === currentDate.toDateString());
-                if (searchTerm) { const lowerTerm = searchTerm.toLowerCase(); filtered = filtered.filter(res => res.name.toLowerCase().includes(lowerTerm) || (res.phone && res.phone.includes(searchTerm)) || (res.instagram && res.instagram.toLowerCase().includes(lowerTerm)) || (res.table && res.table.toLowerCase().includes(lowerTerm)) || (res.notes && res.notes.toLowerCase().includes(lowerTerm))); }
+                if (searchTerm) { const lowerTerm = searchTerm.toLowerCase(); filtered = filtered.filter(res => (res.name && res.name.toLowerCase().includes(lowerTerm)) || (res.phone && res.phone.includes(searchTerm)) || (res.instagram && res.instagram.toLowerCase().includes(lowerTerm)) || (res.table && res.table.toLowerCase().includes(lowerTerm)) || (res.notes && res.notes.toLowerCase().includes(lowerTerm))); }
                 if (activeFilter === 'active') { filtered = filtered.filter(res => res.status === 'confirmed'); }
                 else if (activeFilter === 'completed') { filtered = filtered.filter(res => ['arrived', 'cancelled', 'no-show'].includes(res.status)); }
                 return filtered.sort((a, b) => a.time.localeCompare(b.time));
@@ -717,7 +721,6 @@
                 return { openGuests, completedGuests };
             }, [reservations, currentDate, isPastCutoff]);
 
-            // PACING LOGIC
             const timeToMinutes = (t) => {
                 if (!t) return 0;
                 const cleanT = t.replace(/[^\d:]/g, ''); 
@@ -750,21 +753,15 @@
                             const endMins = timeToMinutes(endStr);
                             
                             let isMatch = false;
-                            if (startMins <= endMins) {
-                                isMatch = (resMins >= startMins && resMins < endMins);
-                            } else {
-                                isMatch = (resMins >= startMins || resMins < endMins);
-                            }
+                            if (startMins <= endMins) { isMatch = (resMins >= startMins && resMins < endMins); } 
+                            else { isMatch = (resMins >= startMins || resMins < endMins); }
                             
-                            if (isMatch) {
-                                pStats[block].pax += parseInt(res.pax || 0, 10);
-                            }
+                            if (isMatch) pStats[block].pax += parseInt(res.pax || 0, 10);
                         }
                     });
                 });
                 return { blocks: blocksConfig, stats: pStats };
             }, [reservations, currentDate, pacingSettings, activeFilter, isPastCutoff]);
-
 
             const renderNoteContent = (noteText) => { if (!noteText) return null; const lines = noteText.split('\n'); return lines.map((line, idx) => { const tag = availableTags.find(t => t.label === line.trim()); if (tag) { const TagIcon = tag.icon; return (<div key={idx} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wide border w-max mb-1 mr-1 ${tag.color} ${theme.tag(tag.color)}`}><TagIcon size={10} />{tag.label}</div>); } return (<div key={idx} className={`text-sm truncate italic ${theme.textMuted}`}>{line}</div>); }); };
             
@@ -804,7 +801,6 @@
                                                 <div className={`text-lg font-bold ${isDarkMode ? 'text-stone-100' : 'text-stone-800'}`}>{activeFilter !== 'completed' ? stats.openGuests : stats.completedGuests}</div>
                                             </div>
                                         </div>
-                                        {/* PACING POPOVER */}
                                         {showPacing && activeFilter !== 'completed' && !isPastCutoff && (
                                             <div className={`absolute top-full left-0 mt-2 w-64 rounded-xl shadow-xl border z-50 overflow-hidden animate-dropdown ${theme.card}`}>
                                                 <div className="bg-amber-600 px-4 py-2 flex justify-between items-center text-white">
@@ -853,7 +849,6 @@
                                     <div className={`p-12 text-center ${theme.textMuted}`}><div className="flex justify-center mb-4"><Archive size={48} className="opacity-20" /></div><p>{isPastCutoff ? "Daten aus der Vergangenheit (älter als 3 Tage) werden nicht mehr angezeigt." : (activeFilter === 'completed' ? "Keine erledigten Reservierungen." : "Keine offenen Reservierungen für diesen Tag.")}</p></div>
                                 ) : (
                                     filteredReservations.map((res, index) => {
-                                        // VERSPÄTUNGS-CHECK (Zeit-Warnung)
                                         const delayStatus = (() => {
                                             if (res.status !== 'confirmed') return null;
                                             const resDate = new Date(res.date);
@@ -900,9 +895,7 @@
                                                 <div className="md:col-span-3 flex flex-col justify-center">{renderNoteContent(res.notes)}{res.createdBy && editingId === res.id && <div className="text-[10px] text-amber-600 mt-1">Erstellt von: {res.createdBy}</div>}</div>
                                                 {currentUser.role !== 'chef' && <div className="flex md:col-span-2 md:justify-end gap-2 py-0.5 mt-1 border-t pt-1 md:border-0 md:pt-0 border-dashed border-stone-200 dark:border-stone-700" onClick={(e) => e.stopPropagation()}>
                                                     {res.status === 'confirmed' && <button onClick={() => updateStatus(res.id, 'arrived')} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all duration-200 active:scale-90 tooltip flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-emerald-900/30 hover:text-emerald-400 hover:border-emerald-800' : 'bg-white border-stone-200 text-stone-400 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200'}`} title="Gast ist da"><Users size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">Anwesend</span></button>}
-                                                    
                                                     <button onClick={() => openEditModal(res)} className={`hidden md:flex justify-center py-2 px-2 md:p-1.5 rounded border transition-all duration-200 active:scale-90 items-center ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-stone-700 hover:text-stone-300 hover:border-stone-500' : 'bg-white border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-600 hover:border-stone-300'}`} title="Bearbeiten"><Edit2 size={16} className="w-4 h-4" /></button>
-                                                    
                                                     {res.status === 'confirmed' && <button onClick={() => updateStatus(res.id, 'cancelled')} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all duration-200 active:scale-90 flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-stone-700/50 hover:text-stone-400' : 'bg-white border-stone-200 text-stone-400 hover:bg-stone-100 hover:text-stone-600'}`} title="Normales Storno (Hat abgesagt)"><X size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">Storno</span></button>}
                                                     {res.status === 'confirmed' && <button onClick={() => updateStatus(res.id, 'no-show')} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all duration-200 active:scale-90 flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-red-900/50 hover:text-red-400 hover:border-red-700' : 'bg-white border-stone-200 text-stone-400 hover:bg-red-50 hover:text-red-600 hover:border-red-300'}`} title="Gast nicht erschienen (Blacklist-Eintrag)"><UserX size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">No-Show</span></button>}
                                                     {(res.status === 'cancelled' || res.status === 'arrived' || res.status === 'no-show') && (<button onClick={(e) => { e.stopPropagation(); updateStatus(res.id, 'confirmed'); }} className={`flex-1 md:flex-none justify-center py-2 px-2 md:p-1.5 rounded border transition-all duration-200 active:scale-90 flex items-center gap-1.5 md:gap-0 ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-500 hover:bg-blue-900/30 hover:text-blue-400 hover:border-blue-800' : 'bg-white border-stone-200 text-stone-400 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200'}`} title="Wiederherstellen"><RotateCcw size={16} className="md:w-4 md:h-4" /><span className="md:hidden text-xs font-medium">Wiederherstellen</span></button>)}
@@ -924,7 +917,6 @@
                                 <form onSubmit={handleSubmit} className="p-6">
                                     <div className="grid grid-cols-2 gap-3 md:gap-4">
                                         
-                                        {/* NO-SHOW FRÜHWARNUNG */}
                                         {pastNoShows.length > 0 && (
                                             <div className="col-span-2 bg-red-100 border-l-4 border-red-500 text-red-800 p-3 rounded-lg flex flex-col gap-2 mb-2 animate-spring shadow-sm">
                                                 <div className="flex items-start gap-2 cursor-pointer" onClick={() => setShowNoShowDetails(!showNoShowDetails)}>
@@ -949,20 +941,38 @@
                                             </div>
                                         )}
 
-                                        {/* 1. KONTAKTDATEN GANZ OBEN */}
                                         <div className="col-span-2 flex gap-2">
-                                            <div className="w-1/2 min-w-0">
+                                            <div className="w-1/2 min-w-0 relative">
                                                 <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Telefon</label>
                                                 <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="017..." className={`w-full min-w-0 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} autoFocus />
+                                                {activeSuggestions.field === 'phone' && activeSuggestions.items.length > 0 && (
+                                                    <div className={`absolute z-50 left-0 right-0 mt-1 rounded-lg shadow-xl border overflow-hidden ${theme.card} animate-dropdown max-h-48 overflow-y-auto`}>
+                                                        {activeSuggestions.items.map((item, i) => (
+                                                            <div key={i} onClick={() => applySuggestion(item)} className={`p-2 cursor-pointer border-b last:border-0 ${theme.rowHover} ${theme.text}`}>
+                                                                <div className="font-bold text-sm truncate">{item.name || 'Ohne Name'}</div>
+                                                                <div className={`text-xs truncate ${theme.textMuted}`}>{item.phone} {item.instagram ? `• ${item.instagram}` : ''}</div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="w-1/2 min-w-0">
+                                            <div className="w-1/2 min-w-0 relative">
                                                 <label className={`block text-sm font-medium mb-1 flex items-center gap-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Insta (@)</label>
                                                 <input type="text" name="instagram" value={formData.instagram} onChange={handleInputChange} placeholder="mabelle..." className={`w-full min-w-0 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} />
+                                                {activeSuggestions.field === 'instagram' && activeSuggestions.items.length > 0 && (
+                                                    <div className={`absolute z-50 left-0 right-0 mt-1 rounded-lg shadow-xl border overflow-hidden ${theme.card} animate-dropdown max-h-48 overflow-y-auto`}>
+                                                        {activeSuggestions.items.map((item, i) => (
+                                                            <div key={i} onClick={() => applySuggestion(item)} className={`p-2 cursor-pointer border-b last:border-0 ${theme.rowHover} ${theme.text}`}>
+                                                                <div className="font-bold text-sm truncate">{item.name || 'Ohne Name'}</div>
+                                                                <div className={`text-xs truncate ${theme.textMuted}`}>{item.instagram} {item.phone ? `• ${item.phone}` : ''}</div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
-                                        {/* 2. NAME (Wird erst angezeigt, wenn Kontaktinfo Mindestlänge hat) */}
-                                        {((formData.phone || '').replace(/[\s\-\+\/]/g, '').length >= 8 || (formData.instagram || '').replace(/^@/, '').trim().length >= 5) && (
+                                        {((formData.phone || '').replace(/[\s\-\+\/]/g, '').length >= 7 || (formData.instagram || '').replace(/^@/, '').trim().length >= 4) && (
                                             <div className="col-span-2 animate-slide-fade">
                                                 <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Name des Gastes</label>
                                                 <input required name="name" value={formData.name} onChange={handleInputChange} type="text" className={`w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-amber-500 outline-none ${theme.input}`} placeholder="z.B. Max Mustermann" />
@@ -1013,7 +1023,6 @@
                         </div>
                     )}
                     
-                    {/* TABLE SELECTOR OVERLAY */}
                     {showTableSelector && (
                         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col">
                             <div className="p-4 flex justify-between items-center text-white bg-stone-900 border-b border-stone-800 animate-dropdown">
@@ -1054,9 +1063,7 @@
             );
         };
 
-        // --- 8. APP WRAPPER & INIT ---
         const App = () => {
-            // --- 1. LOKALE SPEICHER-CHECKS (Für Schnellstart) ---
             const [bioData, setBioData] = useState(() => {
                 try {
                     const stored = localStorage.getItem('mabelle_biometric');
@@ -1076,14 +1083,11 @@
                 return localStorage.getItem('mabelle_shared_device') === 'true';
             });
 
-            // 2. Start-Ansicht berechnen: Direkt zum Login, wenn Face-ID oder Kassen-Tablet aktiv ist!
             const [view, setView] = useState((bioData || isSharedDevice) ? 'login' : 'landing'); 
 
             const [currentUser, setCurrentUser] = useState(null);
             const [employees, setEmployees] = useState([]);
             
-            // NEU: Ein "Gedächtnis-Anker" (Ref), der immer die aktuellste Mitarbeiterliste hat, 
-            // auch wenn der Face-ID Scan schon vor dem Lade-Ende gestartet wurde!
             const employeesRef = useRef(employees);
             useEffect(() => { employeesRef.current = employees; }, [employees]);
 
@@ -1101,55 +1105,43 @@
             const [pinInput, setPinInput] = useState('');
             const [loginError, setLoginError] = useState(false);
             
-            // --- SICHERHEITS-STATES FÜR LOCKOUT ---
             const [failedAttempts, setFailedAttempts] = useState(0);
             const [lockoutTime, setLockoutTime] = useState(0);
             
             const [pendingUser, setPendingUser] = useState(null);
             const [showBiometricSetup, setShowBiometricSetup] = useState(false);
 
-            // --- MANUELLE & AUTO-SYNC LOGIK ---
             const [isSyncing, setIsSyncing] = useState(false);
             
-            // --- AUTO-SCAN STATE ---
             const [autoScanTriggered, setAutoScanTriggered] = useState(false);
 
             const forceSync = async () => {
                 if (isSyncing) return;
                 setIsSyncing(true);
                 try {
-                    // Startet die Datenbankverbindung hart neu, um feststeckende Caches zu lösen
                     await db.disableNetwork();
                     await db.enableNetwork();
                 } catch (e) { 
                     console.error("Sync Error", e); 
+                } finally {
+                    // LÖSUNG: Timeout nun im finally-Block, damit es immer entsperrt wird
+                    setTimeout(() => setIsSyncing(false), 800); 
                 }
-                setTimeout(() => setIsSyncing(false), 800); // 800ms Lade-Animation
             };
 
-            // Auto-Sync wenn Tablet aufwacht (Bildschirm an oder Tab geöffnet)
             useEffect(() => {
-                const handleVisibility = () => {
-                    if (document.visibilityState === 'visible') forceSync();
-                };
+                const handleVisibility = () => { if (document.visibilityState === 'visible') forceSync(); };
                 const handleFocus = () => forceSync();
-
                 document.addEventListener("visibilitychange", handleVisibility);
                 window.addEventListener("focus", handleFocus);
-                
-                return () => {
-                    document.removeEventListener("visibilitychange", handleVisibility);
-                    window.removeEventListener("focus", handleFocus);
-                };
+                return () => { document.removeEventListener("visibilitychange", handleVisibility); window.removeEventListener("focus", handleFocus); };
             }, []);
-            // ----------------------------------------
 
             const toggleSharedDevice = () => {
                 const newValue = !isSharedDevice;
                 setIsSharedDevice(newValue);
                 localStorage.setItem('mabelle_shared_device', newValue);
                 if (newValue) {
-                    // Lösche evtl. vorhandene Face-ID Verknüpfungen von diesem Kassen-Tablet
                     localStorage.removeItem('mabelle_biometric');
                     setBioData(null);
                 }
@@ -1158,226 +1150,163 @@
             const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
 
             useEffect(() => {
+                let unsubEmp, unsubRes, unsubPac, unsubTab;
+
                 auth.signInAnonymously().then(() => {
-                    db.collection("employees").onSnapshot((snapshot) => {
+                    // LÖSUNG KLON-BUG: "Chef" wird nur ein einziges Mal beim initialen Laden geprüft
+                    db.collection("employees").get().then(snap => {
+                        if (snap.empty) {
+                            db.collection("employees").add({ name: 'Chef', pin: '9999', role: 'admin', hasBiometric: false });
+                        }
+                    }).catch(e => console.error("Init Error", e));
+
+                    // LÖSUNG MEMORY LEAK: Alle Listener werden gespeichert...
+                    unsubEmp = db.collection("employees").onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         setEmployees(data);
-                        if (data.length === 0) db.collection("employees").add({ name: 'Chef', pin: '9999', role: 'admin' });
                     });
                     
-                    db.collection("reservations").onSnapshot((snapshot) => {
+                    unsubRes = db.collection("reservations").onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         setReservations(data);
                     });
                     
-                    db.collection("settings").doc("pacing").onSnapshot((doc) => {
+                    unsubPac = db.collection("settings").doc("pacing").onSnapshot((doc) => {
                         if (doc.exists) setPacingSettings(doc.data());
                     });
 
                     const localTables = localStorage.getItem('mabelle_tables_autosave');
                     if (localTables) setTableLayout(JSON.parse(localTables));
                     
-                    db.collection("settings").doc("tables").onSnapshot((doc) => {
+                    unsubTab = db.collection("settings").doc("tables").onSnapshot((doc) => {
                         if (doc.exists) setTableLayout(doc.data().layout || []);
                     });
                     
                     setIsLoading(false);
                 }).catch((error) => { console.error("Auth Error", error); setIsLoading(false); });
+
+                // ... und hier sauber wieder beendet, wenn die Komponente neu lädt
+                return () => {
+                    if (unsubEmp) unsubEmp();
+                    if (unsubRes) unsubRes();
+                    if (unsubPac) unsubPac();
+                    if (unsubTab) unsubTab();
+                };
             }, []);
 
-            // --- TIMER FÜR SPERR-COUNTDOWN ---
             useEffect(() => {
                 let timer;
-                if (lockoutTime > 0) {
-                    timer = setInterval(() => {
-                        setLockoutTime(prev => prev - 1);
-                    }, 1000);
-                } else if (lockoutTime === 0 && failedAttempts >= 3) {
-                    setFailedAttempts(0);
-                }
+                if (lockoutTime > 0) { timer = setInterval(() => { setLockoutTime(prev => prev - 1); }, 1000); } 
+                else if (lockoutTime === 0 && failedAttempts >= 3) { setFailedAttempts(0); }
                 return () => clearInterval(timer);
             }, [lockoutTime, failedAttempts]);
 
-            // --- LOGIN LOGIK MIT BIOMETRIE-PFLICHT ---
             useEffect(() => {
                 if (pinInput.length === 4) {
                     const user = employees.find(emp => emp.pin === pinInput);
                     if (user) { 
-                        // Wenn der Browser WebAuthn unterstützt, MUSS der Nutzer es einrichten
-                        // (es sei denn, dieses Gerät ist als "Laden-Tablet" markiert)
                         if (window.PublicKeyCredential && !bioData && !isSharedDevice) {
-                            
-                            // Single-Device-Sperre checken!
-                            // Wenn der Nutzer schon ein verknüpftes Handy hat und NICHT der Admin ist, blockieren.
                             if (user.hasBiometric && user.role !== 'admin') {
                                 alert(`Sicherheitssperre: Ihr Profil (${user.name}) ist bereits fest mit einem anderen Gerät verknüpft.\n\nBitte wenden Sie sich an einen Admin, um Ihr altes Gerät zu trennen, bevor Sie ein neues einrichten.`);
-                                setPinInput('');
-                                setLoginError(true);
+                                setPinInput(''); setLoginError(true);
                                 setTimeout(() => { setPinInput(''); setLoginError(false); }, 600);
                                 return;
                             }
-                            
-                            setPinInput(''); 
-                            setLoginError(false); 
-                            setFailedAttempts(0); 
-                            setPendingUser(user);
-                            setShowBiometricSetup(true);
+                            setPinInput(''); setLoginError(false); setFailedAttempts(0); setPendingUser(user); setShowBiometricSetup(true);
                         } else {
-                            setPinInput(''); 
-                            setLoginError(false); 
-                            setFailedAttempts(0); 
-                            doLogin(user);
+                            setPinInput(''); setLoginError(false); setFailedAttempts(0); doLogin(user);
                         }
                     } else { 
-                        setLoginError(true); 
-                        const newAttempts = failedAttempts + 1;
-                        setFailedAttempts(newAttempts);
+                        setLoginError(true); const newAttempts = failedAttempts + 1; setFailedAttempts(newAttempts);
                         if (newAttempts >= 3) setLockoutTime(30);
                         setTimeout(() => { setPinInput(''); setLoginError(false); }, 600); 
                     }
                 }
             }, [pinInput, employees, failedAttempts, bioData]);
 
-            const doLogin = (user) => {
-                setCurrentUser(user);
-                setPendingUser(null);
-                setShowBiometricSetup(false);
-                setView('book');
-            };
+            const doLogin = (user) => { setCurrentUser(user); setPendingUser(null); setShowBiometricSetup(false); setView('book'); };
 
             const handleLogout = () => { 
                 setCurrentUser(null); 
-                // NEU: Wenn es ein Laden-Tablet oder ein Gerät mit Face-ID ist, springt es immer direkt wieder zum Login (Numpad oder Auto-Scan) anstatt auf den Startbildschirm. Spart einen Klick!
                 const currentBio = localStorage.getItem('mabelle_biometric');
                 const currentShared = localStorage.getItem('mabelle_shared_device') === 'true';
                 setView((currentBio || currentShared) ? 'login' : 'landing'); 
             };
             
-            const handleNumpadClick = (num) => { 
-                if (lockoutTime > 0) return; 
-                if (pinInput.length < 4) setPinInput(prev => prev + num); 
-            };
+            const handleNumpadClick = (num) => { if (lockoutTime > 0) return; if (pinInput.length < 4) setPinInput(prev => prev + num); };
 
-            // --- WEBAUTHN REGISTRIERUNG ---
             const registerBiometrics = async () => {
                 try {
                     const randomId = new Uint8Array(16); window.crypto.getRandomValues(randomId);
                     const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
-                    
-                    // Domain-Erkennung für Apple optimiert
                     const hostname = window.location.hostname;
                     const rpConfig = { name: "MABELLE Booking" };
-                    if (hostname !== 'localhost' && !hostname.match(/^\d/)) {
-                        rpConfig.id = hostname;
-                    }
+                    if (hostname !== 'localhost' && !hostname.match(/^\d/)) rpConfig.id = hostname;
                     
                     const credential = await navigator.credentials.create({
                         publicKey: {
-                            // WICHTIG: .buffer für strenge Apple-Geräte
-                            challenge: challenge.buffer, 
-                            rp: rpConfig,
-                            user: { 
-                                id: randomId.buffer, // WICHTIG: .buffer für strenge Apple-Geräte
-                                name: pendingUser.name, 
-                                displayName: pendingUser.name 
-                            },
+                            challenge: challenge.buffer, rp: rpConfig,
+                            user: { id: randomId.buffer, name: pendingUser.name, displayName: pendingUser.name },
                             pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-                            authenticatorSelection: { 
-                                userVerification: "required" 
-                            },
-                            timeout: 60000
+                            authenticatorSelection: { userVerification: "required" }, timeout: 60000
                         }
                     });
 
                     if(credential) {
                         const credId = bufferToBase64url(credential.rawId);
-                        // LÖSUNG "30-Tage Falle": 3650 Tage (10 Jahre) Gültigkeit im lokalen Speicher, da Face-ID ohnehin bei jedem Start scannt. Verhindert unnötige Aussperrungen.
                         const newBioData = { empId: pendingUser.id, credId, expires: Date.now() + (3650 * 24 * 60 * 60 * 1000) };
                         localStorage.setItem('mabelle_biometric', JSON.stringify(newBioData));
                         setBioData(newBioData);
-                        
-                        // Dem System (Firestore) mitteilen, dass der Nutzer jetzt verknüpft ist!
                         await db.collection("employees").doc(pendingUser.id).update({ hasBiometric: true });
-                        
                         doLogin(pendingUser);
                     }
-                } catch (e) {
-                    console.error("Biometrie Fehler:", e);
-                    alert("Sicherheits-Scan fehlgeschlagen:\n" + e.message);
-                }
+                } catch (e) { console.error("Biometrie Fehler:", e); alert("Sicherheits-Scan fehlgeschlagen:\n" + e.message); }
             };
 
-            // --- WEBAUTHN LOGIN ---
             const loginBiometrics = async (isAuto = false) => {
                 try {
                     const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
-                    
                     const hostname = window.location.hostname;
                     const rpId = (hostname !== 'localhost' && !hostname.match(/^\d/)) ? hostname : undefined;
 
                     await navigator.credentials.get({
                         publicKey: {
-                            challenge: challenge.buffer, 
-                            rpId: rpId,
+                            challenge: challenge.buffer, rpId: rpId,
                             allowCredentials: [{ type: "public-key", id: base64urlToBuffer(bioData.credId) }],
-                            userVerification: "required",
-                            timeout: 60000
+                            userVerification: "required", timeout: 60000
                         }
                     });
                     
-                    // Wir schauen zuerst in den "Gedächtnis-Anker", ob die Liste inzwischen geladen ist
                     let user = employeesRef.current.find(e => e.id === bioData.empId);
-                    
-                    // Fallback: Falls die App *wirklich* zu schnell war, laden wir den Nutzer explizit und direkt aus der Cloud nach!
                     if (!user) {
                         try {
                             const userDoc = await db.collection("employees").doc(bioData.empId).get();
-                            if (userDoc.exists) {
-                                user = { id: userDoc.id, ...userDoc.data() };
-                            }
+                            if (userDoc.exists) user = { id: userDoc.id, ...userDoc.data() };
                         } catch(err) { console.error("Fallback Fetch Error", err); }
                     }
 
                     if (user) {
-                        // LÖSUNG "Altes Handy Geist": 
-                        // Wir prüfen, ob der Admin das Gerät zwischenzeitlich in der Datenbank gelöscht hat!
                         if (user.hasBiometric === false && user.role !== 'admin') {
                             alert("Ihre Geräte-Verknüpfung wurde von einem Admin zurückgesetzt. Bitte melden Sie sich mit Ihrer PIN an, um Ihr Profil neu zu verknüpfen.");
-                            localStorage.removeItem('mabelle_biometric');
-                            setBioData(null);
-                            setView('login');
+                            localStorage.removeItem('mabelle_biometric'); setBioData(null); setView('login');
                             return;
                         }
-                        
                         doLogin(user);
                     } else {
-                        alert("Benutzerprofil nicht gefunden.");
-                        localStorage.removeItem('mabelle_biometric');
-                        setBioData(null);
+                        alert("Benutzerprofil nicht gefunden."); localStorage.removeItem('mabelle_biometric'); setBioData(null);
                     }
                 } catch (e) {
                     console.error("Biometrie Fehler:", e);
-                    if (!isAuto) {
-                        alert("Login per Scan fehlgeschlagen. Bitte versuchen Sie es erneut.");
-                    }
+                    if (!isAuto) alert("Login per Scan fehlgeschlagen. Bitte versuchen Sie es erneut.");
                 }
             };
 
-            // --- AUTO-TRIGGER LOGIK ---
-            useEffect(() => {
-                if (view !== 'login') {
-                    setAutoScanTriggered(false); // Reset, wenn wir die Login-Ansicht verlassen
-                }
-            }, [view]);
+            useEffect(() => { if (view !== 'login') setAutoScanTriggered(false); }, [view]);
 
             useEffect(() => {
-                // Wenn wir auf der Login-Seite sind, ein Token existiert und wir noch keinen Auto-Scan probiert haben:
                 if (view === 'login' && bioData && !showBiometricSetup && !isSharedDevice && !autoScanTriggered) {
                     setAutoScanTriggered(true);
-                    // 300ms Verzögerung, damit die Benutzeroberfläche erst sanft laden kann
-                    setTimeout(() => {
-                        loginBiometrics(true);
-                    }, 300);
+                    setTimeout(() => { loginBiometrics(true); }, 300);
                 }
             }, [view, bioData, showBiometricSetup, isSharedDevice, autoScanTriggered]);
 
@@ -1406,7 +1335,6 @@
             }
             
             if (view === 'login') {
-                // FALL 1: 30-Tage Token existiert auf diesem Gerät (und es ist kein Shared Device)
                 if (bioData && !showBiometricSetup && !isSharedDevice) {
                     const knownUser = employees.find(e => e.id === bioData.empId);
                     return (
@@ -1425,7 +1353,6 @@
                     );
                 }
 
-                // FALL 2: Pflicht-Registrierung nach PIN-Eingabe
                 if (showBiometricSetup && pendingUser) {
                     const isAdmin = pendingUser.role === 'admin';
                     return (
@@ -1443,7 +1370,7 @@
                                     <div className={`p-4 rounded-xl mb-6 text-sm text-left ${isDarkMode ? 'bg-stone-900' : 'bg-stone-100'}`}>
                                         <ul className="space-y-2">
                                             <li className="flex items-center gap-2"><CheckCircle size={16} className="text-emerald-500"/> Nur noch per Face-ID / Daumen einloggen</li>
-                                            <li className="flex items-center gap-2"><CheckCircle size={16} className="text-emerald-500"/> PIN-Eingabe entfällt für 30 Tage</li>
+                                            <li className="flex items-center gap-2"><CheckCircle size={16} className="text-emerald-500"/> PIN-Eingabe entfällt</li>
                                             <li className="flex items-center gap-2"><CheckCircle size={16} className="text-emerald-500"/> Fremdzugriff unmöglich</li>
                                         </ul>
                                     </div>
@@ -1467,7 +1394,6 @@
                     );
                 }
 
-                // FALL 3: Klassische PIN Eingabe
                 return (
                 <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${theme.bg}`}>
                     <div className={`w-full max-w-sm p-8 rounded-2xl shadow-xl transition-all duration-300 ${theme.card} ${lockoutTime > 0 ? 'border-2 border-red-500' : ''}`}>
