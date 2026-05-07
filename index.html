@@ -200,7 +200,7 @@
         const Check = (p) => <IconBase {...p}><polyline points="20 6 9 17 4 12"/></IconBase>;
         const Square = (p) => <IconBase {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></IconBase>;
         const Circle = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/></IconBase>;
-        const DoorOpen = (p) => <IconBase {...p}><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></IconBase>;
+        const DoorOpen = (p) => <IconBase {...p}><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></IconBase>;
         const Maximize = (p) => <IconBase {...p}><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></IconBase>;
         const Minus = (p) => <IconBase {...p}><path d="M5 12h14"/></IconBase>;
         const Copy = (p) => <IconBase {...p}><rect width="13" height="13" x="9" y="9" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></IconBase>;
@@ -380,10 +380,11 @@
                     {selTable && (
                         <div className="mt-4 p-4 bg-stone-100 dark:bg-stone-900 rounded-lg flex flex-wrap gap-4 items-center border border-stone-200 dark:border-stone-700">
                             {selTable.type !== 'wall' && selTable.type !== 'window' && selTable.type !== 'door' && <div><label className="text-xs uppercase font-bold text-stone-500">Name</label><input value={selTable.label} onChange={e => updateTable(selTable.id, 'label', e.target.value)} className={`block w-20 p-1 rounded border ${theme.input}`}/></div>}
-                            {selTable.type === 'table' && <div><label className="text-xs uppercase font-bold text-stone-500">Plätze</label><input type="number" value={selTable.seats} onChange={e => updateTable(selTable.id, 'seats', parseInt(e.target.value))} className={`block w-16 p-1 rounded border ${theme.input}`}/></div>}
-                            <div><label className="text-xs uppercase font-bold text-stone-500">Breite/Größe</label><div className="flex items-center gap-2"><input type="range" min="10" max="400" value={selTable.w} onChange={e => updateTable(selTable.id, 'w', parseInt(e.target.value))} className="block w-24"/><input type="number" value={selTable.w} onChange={e => updateTable(selTable.id, 'w', parseInt(e.target.value))} className={`w-14 p-1 text-xs rounded border ${theme.input} text-center`} /></div></div>
-                            {selTable.subtype !== 'round' && (<div><label className="text-xs uppercase font-bold text-stone-500">Höhe</label><div className="flex items-center gap-2"><input type="range" min="4" max="400" value={selTable.h} onChange={e => updateTable(selTable.id, 'h', parseInt(e.target.value))} className="block w-24"/><input type="number" value={selTable.h} onChange={e => updateTable(selTable.id, 'h', parseInt(e.target.value))} className={`w-14 p-1 text-xs rounded border ${theme.input} text-center`} /></div></div>)}
-                            <div><label className="text-xs uppercase font-bold text-stone-500">Rotation</label><div className="flex items-center gap-2"><input type="range" min="0" max="360" value={selTable.rotation || 0} onChange={e => updateTable(selTable.id, 'rotation', parseInt(e.target.value))} className="block w-24"/><input type="number" min="0" max="360" value={selTable.rotation || 0} onChange={e => updateTable(selTable.id, 'rotation', parseInt(e.target.value))} className={`w-14 p-1 text-xs rounded border ${theme.input} text-center`} /><span className="text-xs text-stone-500">°</span></div></div>
+                            {/* STABILITÄT: parseInt Fallbacks hinzugefügt, um NaN Abstürze bei leeren Feldern zu verhindern */}
+                            {selTable.type === 'table' && <div><label className="text-xs uppercase font-bold text-stone-500">Plätze</label><input type="number" value={selTable.seats} onChange={e => updateTable(selTable.id, 'seats', parseInt(e.target.value, 10) || 0)} className={`block w-16 p-1 rounded border ${theme.input}`}/></div>}
+                            <div><label className="text-xs uppercase font-bold text-stone-500">Breite/Größe</label><div className="flex items-center gap-2"><input type="range" min="10" max="400" value={selTable.w} onChange={e => updateTable(selTable.id, 'w', parseInt(e.target.value, 10) || 10)} className="block w-24"/><input type="number" value={selTable.w} onChange={e => updateTable(selTable.id, 'w', parseInt(e.target.value, 10) || 10)} className={`w-14 p-1 text-xs rounded border ${theme.input} text-center`} /></div></div>
+                            {selTable.subtype !== 'round' && (<div><label className="text-xs uppercase font-bold text-stone-500">Höhe</label><div className="flex items-center gap-2"><input type="range" min="4" max="400" value={selTable.h} onChange={e => updateTable(selTable.id, 'h', parseInt(e.target.value, 10) || 10)} className="block w-24"/><input type="number" value={selTable.h} onChange={e => updateTable(selTable.id, 'h', parseInt(e.target.value, 10) || 10)} className={`w-14 p-1 text-xs rounded border ${theme.input} text-center`} /></div></div>)}
+                            <div><label className="text-xs uppercase font-bold text-stone-500">Rotation</label><div className="flex items-center gap-2"><input type="range" min="0" max="360" value={selTable.rotation || 0} onChange={e => updateTable(selTable.id, 'rotation', parseInt(e.target.value, 10) || 0)} className="block w-24"/><input type="number" min="0" max="360" value={selTable.rotation || 0} onChange={e => updateTable(selTable.id, 'rotation', parseInt(e.target.value, 10) || 0)} className={`w-14 p-1 text-xs rounded border ${theme.input} text-center`} /><span className="text-xs text-stone-500">°</span></div></div>
                             <div className="flex gap-2 ml-auto"><button onClick={duplicateTable} className="text-blue-500 hover:bg-blue-100 p-2 rounded flex items-center gap-1" title="Kopieren"><Copy size={18}/></button><button onClick={deleteTable} className="text-red-500 hover:bg-red-100 p-2 rounded"><Trash2 size={18}/></button></div>
                         </div>
                     )}
@@ -586,15 +587,15 @@
                 const { name, value } = e.target; 
                 setFormData(prev => ({ ...prev, [name]: value }));
                 
-                // STABILITÄT: Sicheres String-Parsing
+                // STABILITÄT: String-Typisierung erzwungen, damit Null-Werte beim Copy&Paste das CRM nicht crashen
                 if (name === 'phone') {
-                    const cleanInput = String(value).replace(/[\s\-\+\/]/g, '');
+                    const cleanInput = String(value || '').replace(/[\s\-\+\/]/g, '');
                     if (cleanInput.length >= 7) {
                         const matches = [];
                         const seen = new Set();
                         [...reservations].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(r => {
                             if (r.phone) {
-                                const cleanRPhone = String(r.phone).replace(/[\s\-\+\/]/g, '');
+                                const cleanRPhone = String(r.phone || '').replace(/[\s\-\+\/]/g, '');
                                 if (cleanRPhone.includes(cleanInput) && !seen.has(cleanRPhone)) {
                                     seen.add(cleanRPhone);
                                     matches.push({ name: r.name, phone: r.phone, instagram: r.instagram });
@@ -606,13 +607,13 @@
                         setActiveSuggestions({ field: null, items: [] });
                     }
                 } else if (name === 'instagram') {
-                    const cleanInput = String(value).replace(/^@/, '').trim().toLowerCase();
+                    const cleanInput = String(value || '').replace(/^@/, '').trim().toLowerCase();
                     if (cleanInput.length >= 4) {
                         const matches = [];
                         const seen = new Set();
                         [...reservations].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(r => {
                             if (r.instagram) {
-                                const cleanRIg = String(r.instagram).replace(/^@/, '').trim().toLowerCase();
+                                const cleanRIg = String(r.instagram || '').replace(/^@/, '').trim().toLowerCase();
                                 if (cleanRIg.includes(cleanInput) && !seen.has(cleanRIg)) {
                                     seen.add(cleanRIg);
                                     matches.push({ name: r.name, phone: r.phone, instagram: r.instagram });
@@ -660,7 +661,8 @@
                 ).sort((a, b) => new Date(b.date) - new Date(a.date));
             }, [formData.phone, formData.instagram, reservations]);
 
-            const handleSubmit = async (e) => {
+            // STABILITÄT: handleSubmit hat KEIN async/await mehr, blockiert also die UI nicht beim Speichern!
+            const handleSubmit = (e) => {
                 e.preventDefault();
                 const phoneVal = (formData.phone || '').trim();
                 const igVal = (formData.instagram || '').trim();
@@ -675,33 +677,37 @@
                     if (cleanIg.length > 0 && cleanIg.length < 4) { alert('Der Instagram-Name ist zu kurz (mindestens 4 Zeichen).'); return; }
                 }
 
-                try {
-                    const now = new Date().toISOString();
-                    const [y, m, d] = formData.date.split('-').map(Number);
-                    const newDateObj = new Date(y, m - 1, d);
-                    const newDateString = newDateObj.toDateString();
-                    // STABILITÄT: Safe Integer Parsing
-                    const safePax = parseInt(formData.pax || 0, 10);
-                    const cleanData = { ...formData, name: (formData.name || '').trim(), phone: phoneVal, instagram: igVal, pax: safePax };
+                const now = new Date().toISOString();
+                const [y, m, d] = formData.date.split('-').map(Number);
+                const newDateObj = new Date(y, m - 1, d);
+                const newDateString = newDateObj.toDateString();
+                
+                // STABILITÄT: Sicheres Parsen der Gästezahl (verhindert NaN Fehler)
+                const safePax = parseInt(formData.pax, 10) || 1;
+                const cleanData = { ...formData, name: (formData.name || '').trim(), phone: phoneVal, instagram: igVal, pax: safePax };
 
-                    if (editingId) {
-                        await db.collection("reservations").doc(editingId).update({ ...cleanData, date: newDateString, updatedBy: currentUser.name, updatedAt: now });
-                    } else {
-                        const newRes = { ...cleanData, date: newDateString, status: 'confirmed', createdBy: currentUser.name, createdAt: now, updatedBy: null, updatedAt: null };
-                        await db.collection("reservations").add(newRes);
-                    }
-                    closeModal();
-                } catch (e) { console.error("Error saving reservation: ", e); }
+                if (editingId) {
+                    db.collection("reservations").doc(editingId).update({ ...cleanData, date: newDateString, updatedBy: currentUser.name, updatedAt: now })
+                      .catch(err => console.error("Update Fehler:", err));
+                } else {
+                    const newRes = { ...cleanData, date: newDateString, status: 'confirmed', createdBy: currentUser.name, createdAt: now, updatedBy: null, updatedAt: null };
+                    db.collection("reservations").add(newRes).catch(err => console.error("Neu Fehler:", err));
+                }
+                closeModal(); // Optimistic UI: Schließt das Fenster sofort und fügt es nahtlos ein
             };
 
             const openAddModal = () => { setEditingId(null); setFormData({ name: '', time: '18:00', pax: 2, table: '', phone: '', instagram: '', notes: '', date: getIsoDate(currentDate) }); setShowNoShowDetails(false); setActiveSuggestions({ field: null, items: [] }); setIsModalOpen(true); };
             const openEditModal = (res) => { if (currentUser.role === 'chef') return; setEditingId(res.id); const d = new Date(res.date); setFormData({ name: res.name, time: res.time, pax: res.pax, table: res.table, phone: res.phone || '', instagram: res.instagram || '', notes: res.notes || '', date: getIsoDate(d) }); setShowNoShowDetails(false); setActiveSuggestions({ field: null, items: [] }); setIsModalOpen(true); };
             const closeModal = () => { setIsModalOpen(false); setActiveSuggestions({ field: null, items: [] }); };
-            const updateStatus = async (id, newStatus) => {
-                try {
-                    const now = new Date().toISOString();
-                    await db.collection("reservations").doc(id).update({ status: newStatus, updatedBy: currentUser.name, updatedAt: now });
-                } catch (e) { console.error("Error updating status: ", e); }
+            
+            // STABILITÄT: updateStatus ist jetzt auch asynchron abgekoppelt für Echtzeit-Feeling
+            const updateStatus = (id, newStatus) => {
+                const now = new Date().toISOString();
+                db.collection("reservations").doc(id).update({ status: newStatus, updatedBy: currentUser.name, updatedAt: now })
+                  .catch(e => {
+                      console.error("Status Update Fehler: ", e);
+                      alert("Das Update konnte nicht gesendet werden. Bitte prüfen Sie Ihre Verbindung.");
+                  });
             };
 
             const filteredReservations = useMemo(() => {
@@ -710,7 +716,7 @@
                 if (searchTerm) { const lowerTerm = searchTerm.toLowerCase(); filtered = filtered.filter(res => (res.name && res.name.toLowerCase().includes(lowerTerm)) || (res.phone && res.phone.includes(searchTerm)) || (res.instagram && res.instagram.toLowerCase().includes(lowerTerm)) || (res.table && res.table.toLowerCase().includes(lowerTerm)) || (res.notes && res.notes.toLowerCase().includes(lowerTerm))); }
                 if (activeFilter === 'active') { filtered = filtered.filter(res => res.status === 'confirmed'); }
                 else if (activeFilter === 'completed') { filtered = filtered.filter(res => ['arrived', 'cancelled', 'no-show'].includes(res.status)); }
-                return filtered.sort((a, b) => a.time.localeCompare(b.time));
+                return filtered.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
             }, [reservations, currentDate, searchTerm, activeFilter, isPastCutoff]);
             
             const stats = useMemo(() => {
@@ -722,7 +728,7 @@
             }, [reservations, currentDate, isPastCutoff]);
 
             const timeToMinutes = (t) => {
-                if (!t) return 0;
+                if (!t || typeof t !== 'string') return 0; // STABILITÄT: Fängt leere oder kaputte Werte ab
                 const cleanT = t.replace(/[^\d:]/g, ''); 
                 const parts = cleanT.split(':');
                 const h = parseInt(parts[0], 10) || 0;
@@ -748,9 +754,11 @@
                     
                     blocksConfig.forEach(block => {
                         const [startStr, endStr] = block.split('-');
-                        if (startStr && endStr) {
+                        if (startStr) {
                             const startMins = timeToMinutes(startStr);
-                            const endMins = timeToMinutes(endStr);
+                            // STABILITÄT: Wenn endStr fehlt (Tippfehler vom Admin), wird es als 23:59 gewertet
+                            const endMins = endStr ? timeToMinutes(endStr) : 1439; 
+                            
                             let isMatch = false;
                             if (startMins <= endMins) { isMatch = (resMins >= startMins && resMins < endMins); } 
                             else { isMatch = (resMins >= startMins || resMins < endMins); }
@@ -979,7 +987,7 @@
 
                                         <div className="col-span-2 flex gap-2">
                                             <div className="w-1/2 min-w-0"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Uhrzeit</label><div className={`flex items-center w-full rounded-lg border px-1 py-2 focus-within:ring-2 focus-within:ring-amber-500 ${theme.input}`}><select value={(formData.time || '18:00').split(':')[0]} onChange={(e) => handleTimeChange('h', e.target.value)} className="w-1/2 text-center bg-transparent border-0 outline-none appearance-none time-select cursor-pointer">{hoursList.map(h => <option key={h} value={h} className={isDarkMode ? 'bg-stone-800' : 'bg-white'}>{h}</option>)}</select><span className="font-bold opacity-50 px-1">:</span><select value={(formData.time || '18:00').split(':')[1]} onChange={(e) => handleTimeChange('m', e.target.value)} className="w-1/2 text-center bg-transparent border-0 outline-none appearance-none time-select cursor-pointer">{minutesList.map(m => <option key={m} value={m} className={isDarkMode ? 'bg-stone-800' : 'bg-white'}>{m}</option>)}</select></div></div>
-                                            <div className="w-1/2 min-w-0"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Personen</label><div className="flex items-center w-full"><button type="button" onClick={() => setFormData(p => ({...p, pax: Math.max(1, parseInt(p.pax || 0, 10)-1)}))} className={`w-14 h-10 text-xl rounded-l-lg font-bold border-y border-l transition-colors active:bg-stone-300 dark:active:bg-stone-500 ${isDarkMode ? 'bg-stone-700 border-stone-600 text-stone-300 hover:bg-stone-600' : 'bg-stone-100 border-stone-200 text-stone-600 hover:bg-stone-200'}`}>-</button><input type="number" name="pax" value={formData.pax} onChange={handleInputChange} className={`w-full min-w-0 text-center border-y h-10 font-bold text-lg outline-none ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-100' : 'bg-white border-stone-200'}`} /><button type="button" onClick={() => setFormData(p => ({...p, pax: parseInt(p.pax || 0, 10)+1}))} className={`w-14 h-10 text-xl rounded-r-lg font-bold border-y border-r transition-colors active:bg-stone-300 dark:active:bg-stone-500 ${isDarkMode ? 'bg-stone-700 border-stone-600 text-stone-300 hover:bg-stone-600' : 'bg-stone-100 border-stone-200 text-stone-600 hover:bg-stone-200'}`}>+</button></div></div></div>
+                                            <div className="w-1/2 min-w-0"><label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Personen</label><div className="flex items-center w-full"><button type="button" onClick={() => setFormData(p => ({...p, pax: Math.max(1, (parseInt(p.pax, 10) || 1)-1)}))} className={`w-14 h-10 text-xl rounded-l-lg font-bold border-y border-l transition-colors active:bg-stone-300 dark:active:bg-stone-500 ${isDarkMode ? 'bg-stone-700 border-stone-600 text-stone-300 hover:bg-stone-600' : 'bg-stone-100 border-stone-200 text-stone-600 hover:bg-stone-200'}`}>-</button><input type="number" name="pax" value={formData.pax} onChange={handleInputChange} className={`w-full min-w-0 text-center border-y h-10 font-bold text-lg outline-none ${isDarkMode ? 'bg-stone-800 border-stone-600 text-stone-100' : 'bg-white border-stone-200'}`} /><button type="button" onClick={() => setFormData(p => ({...p, pax: (parseInt(p.pax, 10) || 0)+1}))} className={`w-14 h-10 text-xl rounded-r-lg font-bold border-y border-r transition-colors active:bg-stone-300 dark:active:bg-stone-500 ${isDarkMode ? 'bg-stone-700 border-stone-600 text-stone-300 hover:bg-stone-600' : 'bg-stone-100 border-stone-200 text-stone-600 hover:bg-stone-200'}`}>+</button></div></div></div>
                                         
                                         <div className="col-span-2">
                                             <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>Tisch</label>
@@ -1116,7 +1124,6 @@
                 if (isSyncing) return;
                 setIsSyncing(true);
                 try {
-                    await db.disableNetwork();
                     await db.enableNetwork();
                 } catch (e) { 
                     console.error("Sync Error", e); 
@@ -1125,12 +1132,22 @@
                 }
             };
 
+            // PERFOMANCE & VERBINDUNG FIX: Sicherstellen, dass das Aufwachen nicht die Verbindung abbricht!
             useEffect(() => {
-                const handleVisibility = () => { if (document.visibilityState === 'visible') forceSync(); };
-                const handleFocus = () => forceSync();
+                let lastHidden = Date.now();
+                const handleVisibility = () => { 
+                    if (document.visibilityState === 'hidden') {
+                        lastHidden = Date.now();
+                    } else if (document.visibilityState === 'visible') {
+                        // Nur Sync erzwingen, wenn Tablet länger als 15 Sekunden geschlafen hat
+                        if (Date.now() - lastHidden > 15000) {
+                            forceSync();
+                        }
+                    } 
+                };
+                
                 document.addEventListener("visibilitychange", handleVisibility);
-                window.addEventListener("focus", handleFocus);
-                return () => { document.removeEventListener("visibilitychange", handleVisibility); window.removeEventListener("focus", handleFocus); };
+                return () => { document.removeEventListener("visibilitychange", handleVisibility); };
             }, []);
 
             const toggleSharedDevice = () => {
@@ -1149,14 +1166,12 @@
                 let unsubEmp, unsubRes, unsubPac, unsubTab;
 
                 auth.signInAnonymously().then(() => {
-                    // Chef-Klon Bug Behoben: Prüft nur einmal, ob die Liste komplett leer ist.
                     db.collection("employees").get().then(snap => {
                         if (snap.empty) {
                             db.collection("employees").add({ name: 'Chef', pin: '9999', role: 'admin', hasBiometric: false });
                         }
                     }).catch(e => console.error("Init Error", e));
 
-                    // Sauberes Aufräumen von Listenern (Memory Leak Fix)
                     unsubEmp = db.collection("employees").onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         setEmployees(data);
@@ -1305,7 +1320,6 @@
                 }
             }, [view, bioData, showBiometricSetup, isSharedDevice, autoScanTriggered]);
 
-            // PERFORMANCE-FIX: Ressourcen-schonender Auto-Logout
             useEffect(() => {
                 if (!currentUser) return; 
                 let lastAction = Date.now();
@@ -1315,11 +1329,10 @@
                 events.forEach(e => document.addEventListener(e, updateTime, { passive: true }));
                 
                 const interval = setInterval(() => {
-                    // Nach 5 Minuten Inaktivität ausloggen
                     if (Date.now() - lastAction > 300000) {
                         handleLogout();
                     }
-                }, 10000); // Checkt nur noch alle 10 Sekunden (spart massiv CPU und Akku)
+                }, 10000); 
 
                 return () => { 
                     events.forEach(e => document.removeEventListener(e, updateTime));
